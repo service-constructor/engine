@@ -92,6 +92,37 @@ func (r *OrderRepository) Save(ctx context.Context, o *domain.Order) error {
 	return nil
 }
 
+// ListStuck returns orders in intermediate states (PENDING awaiting a webhook,
+// EXECUTED awaiting capture) whose freeze TTL elapsed before olderThan.
+func (r *OrderRepository) ListStuck(ctx context.Context, olderThan time.Time, limit int) ([]*domain.Order, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+orderColumns+` FROM orders
+		WHERE state IN ('PENDING','EXECUTED')
+		  AND (freeze_expires_at IS NULL OR freeze_expires_at <= $1)
+		ORDER BY freeze_expires_at NULLS FIRST
+		LIMIT $2`, olderThan, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list stuck orders: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.Order
+	for rows.Next() {
+		o, err := scanOrder(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan stuck order: %w", err)
+		}
+		out = append(out, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate stuck orders: %w", err)
+	}
+	return out, nil
+}
+
 func scanOrder(row interface{ Scan(...any) error }) (*domain.Order, error) {
 	var (
 		o         domain.Order

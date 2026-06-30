@@ -80,3 +80,27 @@ func NewMockExecutor() *MockExecutor {
 func (m *MockExecutor) Execute(_ context.Context, _ ExecuteRequest) (ExecuteResult, error) {
 	return m.Result, m.Err
 }
+
+// MockStatusChecker returns a fixed provider status. Defaults to UNKNOWN so the
+// reconciler stays conservative unless told otherwise.
+type MockStatusChecker struct {
+	Status ProviderStatus
+	Err    error
+	// PerOrder overrides Status for specific order ids.
+	PerOrder map[string]ProviderStatus
+}
+
+// NewMockStatusChecker returns a checker reporting UNKNOWN by default.
+func NewMockStatusChecker() *MockStatusChecker {
+	return &MockStatusChecker{Status: ProviderUnknown, PerOrder: map[string]ProviderStatus{}}
+}
+
+func (m *MockStatusChecker) CheckStatus(_ context.Context, _ string, orderID string) (ProviderStatus, error) {
+	if m.Err != nil {
+		return ProviderUnknown, m.Err
+	}
+	if s, ok := m.PerOrder[orderID]; ok {
+		return s, nil
+	}
+	return m.Status, nil
+}

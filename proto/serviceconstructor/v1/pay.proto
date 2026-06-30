@@ -25,6 +25,17 @@ service PaymentService {
       get: "/v1/services/{service_id}/orders/{order_id}"
     };
   }
+
+  // Callback finalizes an async (PENDING) order. The provider posts the final
+  // status signed with its private key; the platform verifies it against the
+  // service public key. Idempotent by orderId. No user auth: authentication is
+  // the signature itself.
+  rpc Callback(CallbackRequest) returns (Order) {
+    option (google.api.http) = {
+      post: "/v1/services/callback"
+      body: "*"
+    };
+  }
 }
 
 // Quote is the signed payment instruction issued by a service. The platform
@@ -98,4 +109,15 @@ message Order {
 message GetOrderRequest {
   string service_id = 1;
   string order_id = 2;
+}
+
+// CallbackRequest is the provider's signed async finalization (white paper
+// section 9). Signed with the service private key over all fields except sig.
+message CallbackRequest {
+  string order_id = 1;
+  // status is "SUCCESS" or "FAILED".
+  string status = 2;
+  string external_ref = 3;
+  string kid = 4;
+  string sig = 5;
 }

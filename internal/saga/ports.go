@@ -7,6 +7,7 @@ package saga
 
 import (
 	"context"
+	"time"
 
 	"github.com/nvsces/service-constructor/internal/domain"
 )
@@ -93,4 +94,31 @@ type OrderStore interface {
 	FindByNonce(ctx context.Context, serviceID, nonce string) (*domain.Order, error)
 	// Save persists the order's current state (after a transition).
 	Save(ctx context.Context, o *domain.Order) error
+	// ListStuck returns orders in intermediate states whose freeze TTL elapsed
+	// before olderThan, up to limit. The reconciler drives these to a final
+	// state. EXECUTED (capture pending) and PENDING (awaiting webhook) qualify.
+	ListStuck(ctx context.Context, olderThan time.Time, limit int) ([]*domain.Order, error)
 }
+
+// StatusChecker queries the canonical order status from the service's statusUrl
+// (white paper section 11.2, query-before-compensate). The reconciler consults
+// it before any release so a lost execute response never triggers a blind
+// refund of an actually-delivered service.
+type StatusChecker interface {
+	// CheckStatus returns the provider's verdict for an order. It returns
+	// (Unknown, nil) when the provider cannot determine the status, in which
+	// case the reconciler must not compensate.
+	CheckStatus(ctx context.Context, statusURL, orderID string) (ProviderStatus, error)
+}
+
+// ProviderStatus is the canonical status reported by a service's statusUrl.
+type ProviderStatus string
+
+const (
+	// ProviderDone: the service was delivered; the order must be captured.
+	ProviderDone ProviderStatus = "DONE"
+	// ProviderNotDone: the service was not delivered; safe to release.
+	ProviderNotDone ProviderStatus = "NOT_DONE"
+	// ProviderUnknown: status indeterminate; do NOT compensate.
+	ProviderUnknown ProviderStatus = "UNKNOWN"
+)

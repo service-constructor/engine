@@ -59,10 +59,14 @@ func UnaryServerInterceptor(a Authenticator, resolve RoleResolver) grpc.UnarySer
 }
 
 // DefaultRoleResolver enforces the platform policy: registry/admin methods need
-// the admin role; payment methods need an authenticated user; anything else is
-// public.
+// the admin role; the payment Pay/GetOrder methods need an authenticated user;
+// the provider Callback is public (authenticated by its signature, not a user
+// session); anything else is public.
 func DefaultRoleResolver(fullMethod string) Requirement {
 	switch {
+	case strings.HasSuffix(fullMethod, "/Callback"):
+		// Provider webhook: signature is the authentication.
+		return Public
 	case strings.Contains(fullMethod, "ServiceRegistry"):
 		return RequireAdmin
 	case strings.Contains(fullMethod, "PaymentService"):

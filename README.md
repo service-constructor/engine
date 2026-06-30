@@ -140,6 +140,16 @@ A `DeviceKeyResolver` supplies device public keys (static for local runs).
 |------------------------------------------------|-------------------------------|
 | `POST /v1/services/pay`                        | Run the saga (auth: user)     |
 | `GET  /v1/services/{serviceId}/orders/{orderId}` | Order state                 |
+| `POST /v1/services/callback`                   | Provider webhook (auth: signature) |
+
+**Async execution.** A slow provider returns `PENDING`; the order parks until
+the provider posts a signed callback to `/v1/services/callback` (verified
+against the service key, idempotent by orderId): `SUCCESS` captures, `FAILED`
+releases. A background **reconciler** scans orders stuck past their freeze TTL
+and finalizes them — but before any release it queries the service's `statusUrl`
+(**query-before-compensate**, white paper section 11.2): `DONE` captures,
+`NOT_DONE` releases, `UNKNOWN` is left untouched, so a lost response never
+triggers a blind refund of a delivered service.
 
 ## Development
 
@@ -161,7 +171,8 @@ vendored under `third_party/` (no Buf Schema Registry auth required).
 - [x] Admin UI (React + Vite + TS)
 - [x] Signed quote + device-signed consent verification
 - [x] Payment saga: `freeze → execute → capture` with compensation (order state machine)
-- [ ] Async webhook callback (`/v1/services/callback`) to finalize PENDING orders
-- [ ] Outbox dispatcher + reconciler (query-before-compensate)
+- [x] Async webhook callback (`/v1/services/callback`, signed) to finalize PENDING orders
+- [x] Reconciler with query-before-compensate (polls service `statusUrl`)
+- [ ] Outbox dispatcher (transactional outbox table ships; dispatcher pending)
 - [ ] Real Ledger / Executor adapters (mocks ship today)
 - [ ] Server SDK for service integrators

@@ -231,7 +231,8 @@ func (o *Orchestrator) run(ctx context.Context, order *domain.Order, svc *domain
 
 	switch res.Status {
 	case ExecutePending:
-		// Async: park the order; the webhook (future work) finalizes it.
+		// Async: park the order. The provider webhook (HandleCallback) or the
+		// reconciler finalizes it later.
 		_ = o.transition(ctx, order, domain.OrderPending)
 		return order, nil
 	case ExecuteFailed:
@@ -288,4 +289,89 @@ func (o *Orchestrator) transition(ctx context.Context, order *domain.Order, next
 	}
 	order.UpdatedAt = o.now().UTC()
 	return o.orders.Save(ctx, order)
+}
+
+// ProcessCallback verifies a signed provider webhook and finalizes the order.
+// The signature is checked against the service registered for the order, so a
+// forged callback cannot complete or fail someone else's payment.
+func (o *Orchestrator) ProcessCallback(ctx context.Context, cb Callback) (*domain.Order, error) {
+	order, err := o.orders.Get(ctx, cb.OrderID)
+	if err != nil {
+		return nil, err
+	}
+	svc, err := o.services.Lookup(ctx, order.ServiceID)
+	if err != nil {
+		return nil, err
+	}
+	if err := VerifyCallbackSignature(cb, svc); err != nil {
+		return nil, err
+	}
+	// Already terminal (idempotent / late delivery): no-op.
+	if order.State.Terminal() {
+		return order, nil
+	}
+	if order.State != domain.OrderPending {
+		return nil, fmt.Errorf("%w: order %s is %s, not PENDING", domain.ErrInvalidTransition, cb.OrderID, order.State)
+	}
+	if cb.ExternalRef != "" {
+		order.ExternalRef = cb.ExternalRef
+	}
+	return o.finalize(ctx, order, svc, cb.Success())
+}
+
+// ReconcileOrder drives a single stuck order toward a final state, applying
+// query-before-compensate (white paper section 11.2): it never releases blindly.
+//
+//   - EXECUTED (capture lost): retry capture to COMPLETED. Funds are already
+//     held, so settlement is guaranteed.
+//   - PENDING (execute/webhook lost): ask the provider's statusUrl. DONE -> finalize
+//     success; NOT_DONE -> finalize failure (release); UNKNOWN -> leave untouched.
+//
+// It is a no-op for already-terminal orders.
+func (o *Orchestrator) ReconcileOrder(ctx context.Context, status StatusChecker, order *domain.Order) (*domain.Order, error) {
+	if order.State.Terminal() {
+		return order, nil
+	}
+	svc, err := o.services.Lookup(ctx, order.ServiceID)
+	if err != nil {
+		return nil, err
+	}
+
+	switch order.State {
+	case domain.OrderExecuted:
+		// Service confirmed; only the capture is missing. Retry it.
+		return o.capture(ctx, order, svc)
+
+	case domain.OrderPending:
+		st, err := status.CheckStatus(ctx, svc.StatusURL, order.ID)
+		if err != nil {
+			return order, fmt.Errorf("status check: %w", err)
+		}
+		switch st {
+		case ProviderDone:
+			return o.finalize(ctx, order, svc, true)
+		case ProviderNotDone:
+			return o.finalize(ctx, order, svc, false)
+		default:
+			// UNKNOWN: do not compensate. Leave for a later pass / operator.
+			return order, nil
+		}
+
+	default:
+		// Other non-terminal states (FROZEN/EXECUTING) are transient within a
+		// single Pay call; the reconciler does not touch them here.
+		return order, nil
+	}
+}
+
+// finalize drives a PENDING order to its terminal state: success captures and
+// completes; failure releases held funds. Shared by the webhook and reconciler.
+func (o *Orchestrator) finalize(ctx context.Context, order *domain.Order, svc *domain.Service, success bool) (*domain.Order, error) {
+	if !success {
+		return o.fail(ctx, order)
+	}
+	if err := o.transition(ctx, order, domain.OrderExecuted); err != nil {
+		return order, err
+	}
+	return o.capture(ctx, order, svc)
 }

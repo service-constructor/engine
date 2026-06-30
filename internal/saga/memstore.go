@@ -3,6 +3,7 @@ package saga
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/nvsces/service-constructor/internal/domain"
 )
@@ -70,4 +71,24 @@ func (s *MemOrderStore) Save(_ context.Context, o *domain.Order) error {
 	cp := *o
 	s.byID[o.ID] = &cp
 	return nil
+}
+
+func (s *MemOrderStore) ListStuck(_ context.Context, olderThan time.Time, limit int) ([]*domain.Order, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []*domain.Order
+	for _, o := range s.byID {
+		if o.State != domain.OrderPending && o.State != domain.OrderExecuted {
+			continue
+		}
+		if !o.FreezeExpiresAt.IsZero() && o.FreezeExpiresAt.After(olderThan) {
+			continue
+		}
+		cp := *o
+		out = append(out, &cp)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
 }

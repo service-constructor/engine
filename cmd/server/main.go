@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
@@ -87,6 +88,11 @@ func run(log *slog.Logger) error {
 	)
 	paymentSrv := server.NewPaymentServer(orch, orderRepo)
 
+	// Reconciler: background process that finalizes stuck orders, querying the
+	// service statusUrl before any compensation (query-before-compensate).
+	statusChecker := saga.NewHTTPStatusChecker(5 * time.Second)
+	reconciler := saga.NewReconciler(orch, orderRepo, statusChecker, log)
+
 	// Authentication is pluggable: an integrator can replace buildAuthenticator
 	// with their own Authenticator without touching the registry or transport.
 	authn, err := buildAuthenticator(cfg, log)
@@ -128,6 +134,10 @@ func run(log *slog.Logger) error {
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
+	}()
+	go func() {
+		log.Info("reconciler started", "interval", "30s")
+		reconciler.Run(ctx)
 	}()
 
 	select {

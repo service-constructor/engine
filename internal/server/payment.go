@@ -54,6 +54,23 @@ func (s *PaymentServer) Pay(ctx context.Context, req *scv1.PayRequest) (*scv1.Or
 	return orderToProto(order), nil
 }
 
+func (s *PaymentServer) Callback(ctx context.Context, req *scv1.CallbackRequest) (*scv1.Order, error) {
+	if req.GetOrderId() == "" || req.GetSig() == "" {
+		return nil, status.Error(codes.InvalidArgument, "orderId and sig are required")
+	}
+	order, err := s.orch.ProcessCallback(ctx, saga.Callback{
+		OrderID:     req.GetOrderId(),
+		Status:      req.GetStatus(),
+		ExternalRef: req.GetExternalRef(),
+		Kid:         req.GetKid(),
+		Sig:         req.GetSig(),
+	})
+	if err != nil {
+		return nil, payErrToStatus(err)
+	}
+	return orderToProto(order), nil
+}
+
 func (s *PaymentServer) GetOrder(ctx context.Context, req *scv1.GetOrderRequest) (*scv1.Order, error) {
 	order, err := s.orders.Get(ctx, req.GetOrderId())
 	if err != nil {
