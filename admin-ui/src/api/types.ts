@@ -34,6 +34,8 @@ export interface Limits {
 
 export interface Service {
   serviceId: string;
+  /** Account that owns the service (server-assigned). */
+  ownerId?: string;
   name: string;
   publicKeys: PublicKey[];
   origins: string[];

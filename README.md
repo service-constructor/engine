@@ -65,6 +65,12 @@ their existing identity system without forking the app:
 The admin API requires the `admin` role; the interceptor returns `401` when
 unauthenticated and `403` without the role.
 
+**Ownership (multi-tenant).** Each service is owned by the account that created
+it (`owner_id` = the token `sub`). A regular `admin` only sees and edits their
+own services; the `super_admin` role sees and edits all of them. Scoping is
+enforced in both the use-case layer and the SQL (defense in depth), so a
+cross-owner read/update/delete returns `404`.
+
 ## Admin UI
 
 `admin-ui/` is a React + Vite + TypeScript SPA: list, create, edit and delete

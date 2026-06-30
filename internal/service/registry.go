@@ -15,14 +15,27 @@ import (
 	"github.com/nvsces/service-constructor/internal/keygen"
 )
 
-// Repository is the persistence port for services.
+// Repository is the persistence port for services. Read/write methods take a
+// Scope so the storage layer can enforce ownership (defense in depth): a
+// non-super-admin can only touch rows whose owner_id matches.
 type Repository interface {
 	Create(ctx context.Context, s *domain.Service) error
-	Get(ctx context.Context, id string) (*domain.Service, error)
-	List(ctx context.Context, f ListFilter) ([]*domain.Service, string, error)
-	Update(ctx context.Context, s *domain.Service) error
-	Delete(ctx context.Context, id string) error
+	Get(ctx context.Context, scope Scope, id string) (*domain.Service, error)
+	List(ctx context.Context, scope Scope, f ListFilter) ([]*domain.Service, string, error)
+	Update(ctx context.Context, scope Scope, s *domain.Service) error
+	Delete(ctx context.Context, scope Scope, id string) error
 }
+
+// Scope identifies the acting account and its visibility. When AllOwners is
+// true (super-admin), ownership filtering is bypassed; otherwise access is
+// limited to rows owned by OwnerID.
+type Scope struct {
+	OwnerID   string
+	AllOwners bool
+}
+
+// ScopeAll is an unrestricted scope (e.g. for internal callers/tests).
+var ScopeAll = Scope{AllOwners: true}
 
 // ListFilter parameterizes a List query. An empty Status matches all.
 type ListFilter struct {
@@ -71,9 +84,11 @@ func defaultID() string {
 	return "svc_" + strings.ReplaceAll(uuid.NewString(), "-", "")
 }
 
-// Create validates and persists a new service, assigning id and timestamps.
-// Any id, created/updated timestamps on the input are ignored.
-func (r *Registry) Create(ctx context.Context, in *domain.Service) (*domain.Service, error) {
+// Create validates and persists a new service, assigning id, timestamps and
+// owner. Any id, created/updated timestamps on the input are ignored; OwnerID
+// is taken from the scope (a super-admin creating without a concrete owner ends
+// up owning the record itself).
+func (r *Registry) Create(ctx context.Context, scope Scope, in *domain.Service) (*domain.Service, error) {
 	if in.Status == "" {
 		in.Status = domain.StatusDraft
 	}
@@ -82,6 +97,7 @@ func (r *Registry) Create(ctx context.Context, in *domain.Service) (*domain.Serv
 	}
 	now := r.now().UTC()
 	in.ID = r.newID()
+	in.OwnerID = scope.OwnerID
 	in.CreatedAt = now
 	in.UpdatedAt = now
 	if err := r.repo.Create(ctx, in); err != nil {
@@ -90,16 +106,16 @@ func (r *Registry) Create(ctx context.Context, in *domain.Service) (*domain.Serv
 	return in, nil
 }
 
-// Get returns a service by id.
-func (r *Registry) Get(ctx context.Context, id string) (*domain.Service, error) {
+// Get returns a service by id, scoped to the caller's ownership.
+func (r *Registry) Get(ctx context.Context, scope Scope, id string) (*domain.Service, error) {
 	if id == "" {
 		return nil, domain.ErrInvalidArgument
 	}
-	return r.repo.Get(ctx, id)
+	return r.repo.Get(ctx, scope, id)
 }
 
-// List returns a page of services.
-func (r *Registry) List(ctx context.Context, f ListFilter) ([]*domain.Service, string, error) {
+// List returns a page of services visible to the caller.
+func (r *Registry) List(ctx context.Context, scope Scope, f ListFilter) ([]*domain.Service, string, error) {
 	if f.Status != "" && !f.Status.Valid() {
 		return nil, "", domain.ErrInvalidArgument
 	}
@@ -113,13 +129,14 @@ func (r *Registry) List(ctx context.Context, f ListFilter) ([]*domain.Service, s
 	if f.PageSize > maxPage {
 		f.PageSize = maxPage
 	}
-	return r.repo.List(ctx, f)
+	return r.repo.List(ctx, scope, f)
 }
 
 // Update applies the supplied fields to an existing service. The caller is
 // responsible for having merged the update mask into in; here we re-validate
-// and bump UpdatedAt. id must be set.
-func (r *Registry) Update(ctx context.Context, in *domain.Service) (*domain.Service, error) {
+// and bump UpdatedAt. id must be set. The update is scoped: a non-owner that is
+// not a super-admin gets ErrNotFound.
+func (r *Registry) Update(ctx context.Context, scope Scope, in *domain.Service) (*domain.Service, error) {
 	if in.ID == "" {
 		return nil, domain.ErrInvalidArgument
 	}
@@ -127,29 +144,29 @@ func (r *Registry) Update(ctx context.Context, in *domain.Service) (*domain.Serv
 		return nil, err
 	}
 	in.UpdatedAt = r.now().UTC()
-	if err := r.repo.Update(ctx, in); err != nil {
+	if err := r.repo.Update(ctx, scope, in); err != nil {
 		return nil, fmt.Errorf("update service: %w", err)
 	}
 	return in, nil
 }
 
-// Delete removes a service by id.
-func (r *Registry) Delete(ctx context.Context, id string) error {
+// Delete removes a service by id, scoped to the caller's ownership.
+func (r *Registry) Delete(ctx context.Context, scope Scope, id string) error {
 	if id == "" {
 		return domain.ErrInvalidArgument
 	}
-	return r.repo.Delete(ctx, id)
+	return r.repo.Delete(ctx, scope, id)
 }
 
 // GenerateKey creates a new key pair for the service, appends the public key to
 // the registry record, and returns the private key PEM. The private key is not
 // persisted. If retireKID is non-empty, that key is removed from the record
 // (callers wanting an overlap window simply omit retireKID).
-func (r *Registry) GenerateKey(ctx context.Context, serviceID string, alg keygen.Algorithm, retireKID string) (*domain.Service, keygen.KeyPair, error) {
+func (r *Registry) GenerateKey(ctx context.Context, scope Scope, serviceID string, alg keygen.Algorithm, retireKID string) (*domain.Service, keygen.KeyPair, error) {
 	if serviceID == "" {
 		return nil, keygen.KeyPair{}, domain.ErrInvalidArgument
 	}
-	svc, err := r.repo.Get(ctx, serviceID)
+	svc, err := r.repo.Get(ctx, scope, serviceID)
 	if err != nil {
 		return nil, keygen.KeyPair{}, err
 	}
@@ -171,7 +188,7 @@ func (r *Registry) GenerateKey(ctx context.Context, serviceID string, alg keygen
 	svc.PublicKeys = append(svc.PublicKeys, domain.PublicKey{KID: pair.KID, PEM: pair.PublicKeyPEM})
 	svc.UpdatedAt = r.now().UTC()
 
-	if err := r.repo.Update(ctx, svc); err != nil {
+	if err := r.repo.Update(ctx, scope, svc); err != nil {
 		return nil, keygen.KeyPair{}, fmt.Errorf("persist key: %w", err)
 	}
 	return svc, pair, nil

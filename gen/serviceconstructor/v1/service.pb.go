@@ -360,6 +360,9 @@ type Service struct {
 	ServiceId string                 `protobuf:"bytes,1,opt,name=service_id,json=serviceId,proto3" json:"service_id,omitempty"`
 	// Human-readable name shown in the admin.
 	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// owner_id is the account that owns this service. Server-assigned from the
+	// authenticated principal at creation; ignored on input.
+	OwnerId string `protobuf:"bytes,13,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
 	// Public keys for verifying quote/webhook signatures (supports rotation).
 	PublicKeys []*PublicKey `protobuf:"bytes,3,rep,name=public_keys,json=publicKeys,proto3" json:"public_keys,omitempty"`
 	// Allowlist of web-app domains for the WebView and postMessage origin check.
@@ -422,6 +425,13 @@ func (x *Service) GetServiceId() string {
 func (x *Service) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *Service) GetOwnerId() string {
+	if x != nil {
+		return x.OwnerId
 	}
 	return ""
 }
@@ -1033,11 +1043,12 @@ const file_serviceconstructor_v1_service_proto_rawDesc = "" +
 	"\x06Limits\x12\x1d\n" +
 	"\n" +
 	"max_amount\x18\x01 \x01(\tR\tmaxAmount\x12\x19\n" +
-	"\bper_hour\x18\x02 \x01(\x05R\aperHour\"\xc7\x04\n" +
+	"\bper_hour\x18\x02 \x01(\x05R\aperHour\"\xe2\x04\n" +
 	"\aService\x12\x1d\n" +
 	"\n" +
 	"service_id\x18\x01 \x01(\tR\tserviceId\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\x12A\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x19\n" +
+	"\bowner_id\x18\r \x01(\tR\aownerId\x12A\n" +
 	"\vpublic_keys\x18\x03 \x03(\v2 .serviceconstructor.v1.PublicKeyR\n" +
 	"publicKeys\x12\x18\n" +
 	"\aorigins\x18\x04 \x03(\tR\aorigins\x12\x1f\n" +

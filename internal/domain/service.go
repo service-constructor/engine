@@ -58,7 +58,11 @@ type Limits struct {
 // Service is a registry record describing how the platform trusts a service
 // and where it routes funds.
 type Service struct {
-	ID               string
+	ID string
+	// OwnerID is the subject (account) that owns this service. Set from the
+	// authenticated principal at creation; used to scope reads and writes so
+	// each account only sees its own services (super-admins see all).
+	OwnerID          string
 	Name             string
 	PublicKeys       []PublicKey
 	Origins          []string

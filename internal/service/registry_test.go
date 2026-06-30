@@ -27,18 +27,25 @@ func (m *memRepo) Create(_ context.Context, s *domain.Service) error {
 	return nil
 }
 
-func (m *memRepo) Get(_ context.Context, id string) (*domain.Service, error) {
+func visible(scope service.Scope, s *domain.Service) bool {
+	return scope.AllOwners || s.OwnerID == scope.OwnerID
+}
+
+func (m *memRepo) Get(_ context.Context, scope service.Scope, id string) (*domain.Service, error) {
 	s, ok := m.items[id]
-	if !ok {
+	if !ok || !visible(scope, s) {
 		return nil, domain.ErrNotFound
 	}
 	cp := *s
 	return &cp, nil
 }
 
-func (m *memRepo) List(_ context.Context, f service.ListFilter) ([]*domain.Service, string, error) {
+func (m *memRepo) List(_ context.Context, scope service.Scope, f service.ListFilter) ([]*domain.Service, string, error) {
 	var out []*domain.Service
 	for _, s := range m.items {
+		if !visible(scope, s) {
+			continue
+		}
 		if f.Status != "" && s.Status != f.Status {
 			continue
 		}
@@ -48,8 +55,9 @@ func (m *memRepo) List(_ context.Context, f service.ListFilter) ([]*domain.Servi
 	return out, "", nil
 }
 
-func (m *memRepo) Update(_ context.Context, s *domain.Service) error {
-	if _, ok := m.items[s.ID]; !ok {
+func (m *memRepo) Update(_ context.Context, scope service.Scope, s *domain.Service) error {
+	existing, ok := m.items[s.ID]
+	if !ok || !visible(scope, existing) {
 		return domain.ErrNotFound
 	}
 	cp := *s
@@ -57,8 +65,9 @@ func (m *memRepo) Update(_ context.Context, s *domain.Service) error {
 	return nil
 }
 
-func (m *memRepo) Delete(_ context.Context, id string) error {
-	if _, ok := m.items[id]; !ok {
+func (m *memRepo) Delete(_ context.Context, scope service.Scope, id string) error {
+	s, ok := m.items[id]
+	if !ok || !visible(scope, s) {
 		return domain.ErrNotFound
 	}
 	delete(m.items, id)
@@ -88,7 +97,7 @@ func itoa(n int) string {
 
 func TestCreateAssignsIDAndDefaultsStatus(t *testing.T) {
 	reg := newTestRegistry()
-	got, err := reg.Create(context.Background(), &domain.Service{Name: "eSIM"})
+	got, err := reg.Create(context.Background(), service.ScopeAll, &domain.Service{Name: "eSIM"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -105,7 +114,7 @@ func TestCreateAssignsIDAndDefaultsStatus(t *testing.T) {
 
 func TestCreateRejectsMissingName(t *testing.T) {
 	reg := newTestRegistry()
-	_, err := reg.Create(context.Background(), &domain.Service{})
+	_, err := reg.Create(context.Background(), service.ScopeAll, &domain.Service{})
 	if !errors.Is(err, domain.ErrInvalidArgument) {
 		t.Fatalf("err = %v, want ErrInvalidArgument", err)
 	}
@@ -115,13 +124,13 @@ func TestGetUpdateDeleteRoundTrip(t *testing.T) {
 	reg := newTestRegistry()
 	ctx := context.Background()
 
-	created, err := reg.Create(ctx, &domain.Service{Name: "Topup", Status: domain.StatusActive})
+	created, err := reg.Create(ctx, service.ScopeAll, &domain.Service{Name: "Topup", Status: domain.StatusActive})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 
 	created.Name = "Topup v2"
-	updated, err := reg.Update(ctx, created)
+	updated, err := reg.Update(ctx, service.ScopeAll, created)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
@@ -129,7 +138,7 @@ func TestGetUpdateDeleteRoundTrip(t *testing.T) {
 		t.Errorf("name = %q, want Topup v2", updated.Name)
 	}
 
-	got, err := reg.Get(ctx, created.ID)
+	got, err := reg.Get(ctx, service.ScopeAll, created.ID)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -137,10 +146,10 @@ func TestGetUpdateDeleteRoundTrip(t *testing.T) {
 		t.Errorf("persisted name = %q", got.Name)
 	}
 
-	if err := reg.Delete(ctx, created.ID); err != nil {
+	if err := reg.Delete(ctx, service.ScopeAll, created.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, err := reg.Get(ctx, created.ID); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := reg.Get(ctx, service.ScopeAll, created.ID); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("Get after delete: err = %v, want ErrNotFound", err)
 	}
 }
@@ -148,14 +157,50 @@ func TestGetUpdateDeleteRoundTrip(t *testing.T) {
 func TestListFilterByStatus(t *testing.T) {
 	reg := newTestRegistry()
 	ctx := context.Background()
-	_, _ = reg.Create(ctx, &domain.Service{Name: "A", Status: domain.StatusActive})
-	_, _ = reg.Create(ctx, &domain.Service{Name: "D", Status: domain.StatusDraft})
+	_, _ = reg.Create(ctx, service.ScopeAll, &domain.Service{Name: "A", Status: domain.StatusActive})
+	_, _ = reg.Create(ctx, service.ScopeAll, &domain.Service{Name: "D", Status: domain.StatusDraft})
 
-	active, _, err := reg.List(ctx, service.ListFilter{Status: domain.StatusActive})
+	active, _, err := reg.List(ctx, service.ScopeAll, service.ListFilter{Status: domain.StatusActive})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
 	if len(active) != 1 || active[0].Name != "A" {
 		t.Fatalf("active = %+v, want [A]", active)
+	}
+}
+
+func TestOwnershipScoping(t *testing.T) {
+	reg := newTestRegistry()
+	ctx := context.Background()
+	alice := service.Scope{OwnerID: "alice"}
+	bob := service.Scope{OwnerID: "bob"}
+
+	aSvc, err := reg.Create(ctx, alice, &domain.Service{Name: "alice-svc"})
+	if err != nil {
+		t.Fatalf("alice Create: %v", err)
+	}
+	if aSvc.OwnerID != "alice" {
+		t.Errorf("owner = %q, want alice", aSvc.OwnerID)
+	}
+	_, _ = reg.Create(ctx, bob, &domain.Service{Name: "bob-svc"})
+
+	// Each owner sees only their own.
+	aList, _, _ := reg.List(ctx, alice, service.ListFilter{})
+	if len(aList) != 1 || aList[0].Name != "alice-svc" {
+		t.Fatalf("alice list = %+v, want [alice-svc]", aList)
+	}
+
+	// Bob cannot read or delete alice's service.
+	if _, err := reg.Get(ctx, bob, aSvc.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("bob Get alice svc: err = %v, want ErrNotFound", err)
+	}
+	if err := reg.Delete(ctx, bob, aSvc.ID); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("bob Delete alice svc: err = %v, want ErrNotFound", err)
+	}
+
+	// Super-admin sees both.
+	all, _, _ := reg.List(ctx, service.ScopeAll, service.ListFilter{})
+	if len(all) != 2 {
+		t.Fatalf("super-admin list = %d, want 2", len(all))
 	}
 }

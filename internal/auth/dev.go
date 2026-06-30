@@ -23,6 +23,10 @@ func (a AllowAll) Authenticate(_ context.Context, _ string) (*Principal, error) 
 // their own role names onto it or pass a different required role.
 const RoleAdmin = "admin"
 
+// RoleSuperAdmin grants visibility across all owners (bypasses per-account
+// scoping). A regular admin only sees the services they own.
+const RoleSuperAdmin = "super_admin"
+
 // RequireRole returns ErrPermissionDenied unless the principal in ctx holds the
 // role. A missing principal yields ErrUnauthenticated.
 func RequireRole(ctx context.Context, role string) error {

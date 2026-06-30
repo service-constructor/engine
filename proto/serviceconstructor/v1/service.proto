@@ -122,6 +122,9 @@ message Service {
   string service_id = 1;
   // Human-readable name shown in the admin.
   string name = 2;
+  // owner_id is the account that owns this service. Server-assigned from the
+  // authenticated principal at creation; ignored on input.
+  string owner_id = 13;
   // Public keys for verifying quote/webhook signatures (supports rotation).
   repeated PublicKey public_keys = 3;
   // Allowlist of web-app domains for the WebView and postMessage origin check.

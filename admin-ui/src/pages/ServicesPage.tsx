@@ -92,6 +92,7 @@ export function ServicesPage() {
           <thead>
             <tr>
               <th>Name</th>
+              <th>Owner</th>
               <th>Status</th>
               <th>Keys</th>
               <th>Execute URL</th>
@@ -105,6 +106,7 @@ export function ServicesPage() {
                   <div className="strong">{s.name}</div>
                   <div className="mono muted">{s.serviceId}</div>
                 </td>
+                <td className="mono muted">{s.ownerId || "—"}</td>
                 <td>
                   <span className={`badge ${s.status}`}>
                     {STATUS_LABELS[s.status] ?? s.status}

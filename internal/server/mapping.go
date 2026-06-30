@@ -84,6 +84,7 @@ func protoToDomain(p *scv1.Service) *domain.Service {
 func domainToProto(d *domain.Service) *scv1.Service {
 	p := &scv1.Service{
 		ServiceId:  d.ID,
+		OwnerId:    d.OwnerID,
 		Name:       d.Name,
 		Origins:    d.Origins,
 		ExecuteUrl: d.ExecuteURL,

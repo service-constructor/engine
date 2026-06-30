@@ -12,9 +12,26 @@ import (
 	"google.golang.org/grpc/status"
 
 	scv1 "github.com/nvsces/service-constructor/gen/serviceconstructor/v1"
+	"github.com/nvsces/service-constructor/internal/auth"
 	"github.com/nvsces/service-constructor/internal/domain"
 	"github.com/nvsces/service-constructor/internal/service"
 )
+
+// scopeFromContext derives the data-access scope from the authenticated
+// principal: super-admins see all owners, everyone else is limited to the
+// services they own (keyed by the principal subject).
+func scopeFromContext(ctx context.Context) service.Scope {
+	p, ok := auth.PrincipalFromContext(ctx)
+	if !ok || p == nil {
+		// No principal (e.g. AUTH_MODE=none with the AllowAll authenticator that
+		// still injects a dev principal). Treat as a single shared owner.
+		return service.Scope{OwnerID: ""}
+	}
+	if p.HasRole(auth.RoleSuperAdmin) {
+		return service.Scope{AllOwners: true}
+	}
+	return service.Scope{OwnerID: p.Subject}
+}
 
 // RegistryServer implements scv1.ServiceRegistryServer.
 type RegistryServer struct {
@@ -31,7 +48,7 @@ func (s *RegistryServer) CreateService(ctx context.Context, req *scv1.CreateServ
 	if req.GetService() == nil {
 		return nil, status.Error(codes.InvalidArgument, "service is required")
 	}
-	created, err := s.reg.Create(ctx, protoToDomain(req.GetService()))
+	created, err := s.reg.Create(ctx, scopeFromContext(ctx), protoToDomain(req.GetService()))
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -39,7 +56,7 @@ func (s *RegistryServer) CreateService(ctx context.Context, req *scv1.CreateServ
 }
 
 func (s *RegistryServer) GetService(ctx context.Context, req *scv1.GetServiceRequest) (*scv1.Service, error) {
-	svc, err := s.reg.Get(ctx, req.GetServiceId())
+	svc, err := s.reg.Get(ctx, scopeFromContext(ctx), req.GetServiceId())
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -47,7 +64,7 @@ func (s *RegistryServer) GetService(ctx context.Context, req *scv1.GetServiceReq
 }
 
 func (s *RegistryServer) ListServices(ctx context.Context, req *scv1.ListServicesRequest) (*scv1.ListServicesResponse, error) {
-	svcs, next, err := s.reg.List(ctx, service.ListFilter{
+	svcs, next, err := s.reg.List(ctx, scopeFromContext(ctx), service.ListFilter{
 		Status:    statusToDomain(req.GetStatus()),
 		PageSize:  int(req.GetPageSize()),
 		PageToken: req.GetPageToken(),
@@ -69,12 +86,13 @@ func (s *RegistryServer) UpdateService(ctx context.Context, req *scv1.UpdateServ
 	}
 	// Load current, apply masked fields, then persist. This gives PATCH
 	// semantics: only fields named in update_mask change (empty mask = all).
-	current, err := s.reg.Get(ctx, in.GetServiceId())
+	scope := scopeFromContext(ctx)
+	current, err := s.reg.Get(ctx, scope, in.GetServiceId())
 	if err != nil {
 		return nil, toStatus(err)
 	}
 	merged := mergeUpdate(current, in, req.GetUpdateMask().GetPaths())
-	updated, err := s.reg.Update(ctx, merged)
+	updated, err := s.reg.Update(ctx, scope, merged)
 	if err != nil {
 		return nil, toStatus(err)
 	}
@@ -82,7 +100,7 @@ func (s *RegistryServer) UpdateService(ctx context.Context, req *scv1.UpdateServ
 }
 
 func (s *RegistryServer) DeleteService(ctx context.Context, req *scv1.DeleteServiceRequest) (*scv1.DeleteServiceResponse, error) {
-	if err := s.reg.Delete(ctx, req.GetServiceId()); err != nil {
+	if err := s.reg.Delete(ctx, scopeFromContext(ctx), req.GetServiceId()); err != nil {
 		return nil, toStatus(err)
 	}
 	return &scv1.DeleteServiceResponse{}, nil
@@ -97,7 +115,7 @@ func (s *RegistryServer) RotateServiceKey(ctx context.Context, req *scv1.RotateS
 }
 
 func (s *RegistryServer) generateKey(ctx context.Context, serviceID string, alg scv1.KeyAlgorithm, retireKID string) (*scv1.GenerateServiceKeyResponse, error) {
-	svc, pair, err := s.reg.GenerateKey(ctx, serviceID, algToDomain(alg), retireKID)
+	svc, pair, err := s.reg.GenerateKey(ctx, scopeFromContext(ctx), serviceID, algToDomain(alg), retireKID)
 	if err != nil {
 		return nil, toStatus(err)
 	}

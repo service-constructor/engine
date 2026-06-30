@@ -29,7 +29,7 @@ func NewServiceRepository(pool *pgxpool.Pool) *ServiceRepository {
 }
 
 // row mirrors the table; nested fields are stored as JSONB.
-const columns = `service_id, name, public_keys, origins, execute_url, status_url,
+const columns = `service_id, owner_id, name, public_keys, origins, execute_url, status_url,
 	receiving_wallets, fee, limits, status, created_at, updated_at`
 
 func (r *ServiceRepository) Create(ctx context.Context, s *domain.Service) error {
@@ -37,8 +37,8 @@ func (r *ServiceRepository) Create(ctx context.Context, s *domain.Service) error
 
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO services (`+columns+`)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-		s.ID, s.Name, pk, nonNil(s.Origins), s.ExecuteURL, s.StatusURL,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+		s.ID, s.OwnerID, s.Name, pk, nonNil(s.Origins), s.ExecuteURL, s.StatusURL,
 		rw, fee, lim, string(s.Status), s.CreatedAt, s.UpdatedAt,
 	)
 	if isUniqueViolation(err) {
@@ -50,8 +50,14 @@ func (r *ServiceRepository) Create(ctx context.Context, s *domain.Service) error
 	return nil
 }
 
-func (r *ServiceRepository) Get(ctx context.Context, id string) (*domain.Service, error) {
-	row := r.pool.QueryRow(ctx, `SELECT `+columns+` FROM services WHERE service_id = $1`, id)
+func (r *ServiceRepository) Get(ctx context.Context, scope service.Scope, id string) (*domain.Service, error) {
+	q := `SELECT ` + columns + ` FROM services WHERE service_id = $1`
+	args := []any{id}
+	if !scope.AllOwners {
+		args = append(args, scope.OwnerID)
+		q += " AND owner_id = $2"
+	}
+	row := r.pool.QueryRow(ctx, q, args...)
 	s, err := scanService(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, domain.ErrNotFound
@@ -62,13 +68,17 @@ func (r *ServiceRepository) Get(ctx context.Context, id string) (*domain.Service
 	return s, nil
 }
 
-func (r *ServiceRepository) List(ctx context.Context, f service.ListFilter) ([]*domain.Service, string, error) {
+func (r *ServiceRepository) List(ctx context.Context, scope service.Scope, f service.ListFilter) ([]*domain.Service, string, error) {
 	// Keyset pagination ordered by (created_at, service_id) for stability.
 	var (
 		args   []any
 		where  []string
 		cursor cursor
 	)
+	if !scope.AllOwners {
+		args = append(args, scope.OwnerID)
+		where = append(where, fmt.Sprintf("owner_id = $%d", len(args)))
+	}
 	if f.Status != "" {
 		args = append(args, string(f.Status))
 		where = append(where, fmt.Sprintf("status = $%d", len(args)))
@@ -117,18 +127,25 @@ func (r *ServiceRepository) List(ctx context.Context, f service.ListFilter) ([]*
 	return out, next, nil
 }
 
-func (r *ServiceRepository) Update(ctx context.Context, s *domain.Service) error {
+func (r *ServiceRepository) Update(ctx context.Context, scope service.Scope, s *domain.Service) error {
 	pk, rw, fee, lim := encodeJSON(s)
 
-	tag, err := r.pool.Exec(ctx, `
+	q := `
 		UPDATE services SET
 			name = $2, public_keys = $3, origins = $4, execute_url = $5,
 			status_url = $6, receiving_wallets = $7, fee = $8, limits = $9,
 			status = $10, updated_at = $11
-		WHERE service_id = $1`,
+		WHERE service_id = $1`
+	args := []any{
 		s.ID, s.Name, pk, nonNil(s.Origins), s.ExecuteURL, s.StatusURL,
 		rw, fee, lim, string(s.Status), s.UpdatedAt,
-	)
+	}
+	if !scope.AllOwners {
+		args = append(args, scope.OwnerID)
+		q += fmt.Sprintf(" AND owner_id = $%d", len(args))
+	}
+
+	tag, err := r.pool.Exec(ctx, q, args...)
 	if err != nil {
 		return fmt.Errorf("update service: %w", err)
 	}
@@ -138,8 +155,14 @@ func (r *ServiceRepository) Update(ctx context.Context, s *domain.Service) error
 	return nil
 }
 
-func (r *ServiceRepository) Delete(ctx context.Context, id string) error {
-	tag, err := r.pool.Exec(ctx, `DELETE FROM services WHERE service_id = $1`, id)
+func (r *ServiceRepository) Delete(ctx context.Context, scope service.Scope, id string) error {
+	q := `DELETE FROM services WHERE service_id = $1`
+	args := []any{id}
+	if !scope.AllOwners {
+		args = append(args, scope.OwnerID)
+		q += " AND owner_id = $2"
+	}
+	tag, err := r.pool.Exec(ctx, q, args...)
 	if err != nil {
 		return fmt.Errorf("delete service: %w", err)
 	}
@@ -189,7 +212,7 @@ func scanService(row scanner) (*domain.Service, error) {
 		status   string
 	)
 	if err := row.Scan(
-		&s.ID, &s.Name, &pk, &s.Origins, &s.ExecuteURL, &s.StatusURL,
+		&s.ID, &s.OwnerID, &s.Name, &pk, &s.Origins, &s.ExecuteURL, &s.StatusURL,
 		&rw, &fee, &lim, &status, &s.CreatedAt, &s.UpdatedAt,
 	); err != nil {
 		return nil, err
