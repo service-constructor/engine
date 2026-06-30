@@ -94,10 +94,25 @@ type OrderStore interface {
 	FindByNonce(ctx context.Context, serviceID, nonce string) (*domain.Order, error)
 	// Save persists the order's current state (after a transition).
 	Save(ctx context.Context, o *domain.Order) error
+	// SaveWithOutbox persists the order's state AND appends an outbox entry in a
+	// single transaction. This is how capture/release are recorded: the order
+	// transition and the pending ledger op commit atomically, closing the
+	// "ledger applied but order not marked" gap (white paper section 11).
+	SaveWithOutbox(ctx context.Context, o *domain.Order, entry *domain.OutboxEntry) error
 	// ListStuck returns orders in intermediate states whose freeze TTL elapsed
 	// before olderThan, up to limit. The reconciler drives these to a final
 	// state. EXECUTED (capture pending) and PENDING (awaiting webhook) qualify.
 	ListStuck(ctx context.Context, olderThan time.Time, limit int) ([]*domain.Order, error)
+}
+
+// OutboxStore is the dispatcher's view of the outbox: read undispatched entries
+// and mark them done. Separate from OrderStore so the dispatcher depends only on
+// what it needs.
+type OutboxStore interface {
+	// ListUndispatched returns pending entries in insertion order, up to limit.
+	ListUndispatched(ctx context.Context, limit int) ([]*domain.OutboxEntry, error)
+	// MarkDispatched records that an entry's side-effect was applied.
+	MarkDispatched(ctx context.Context, id int64) error
 }
 
 // StatusChecker queries the canonical order status from the service's statusUrl

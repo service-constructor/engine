@@ -248,35 +248,40 @@ func (o *Orchestrator) run(ctx context.Context, order *domain.Order, svc *domain
 	}
 }
 
-// capture debits held and settles to the service + platform, then completes.
+// capture transitions the order to COMPLETED and records the capture as an
+// outbox entry in the SAME transaction. The actual Ledger.Capture is applied
+// later by the dispatcher, idempotently. Because the order is only marked
+// COMPLETED if the outbox row also commits, money and order state cannot
+// desynchronize (white paper section 11).
 func (o *Orchestrator) capture(ctx context.Context, order *domain.Order, svc *domain.Service) (*domain.Order, error) {
-	if err := o.ledger.Capture(ctx, CaptureRequest{
-		OrderID:           order.ID,
-		Net:               order.Net,
-		Fee:               order.Fee,
-		ReceivingWalletID: receivingWalletFor(svc, order.CurrencyID),
-		CurrencyID:        order.CurrencyID,
-	}); err != nil {
-		// Capture failure is retried by reconciliation (funds remain held); we
-		// surface the error but leave the order in EXECUTED.
-		return order, fmt.Errorf("capture: %w", err)
+	entry := &domain.OutboxEntry{
+		OrderID: order.ID,
+		Op:      domain.OutboxCapture,
+		Payload: map[string]any{
+			"net":               order.Net,
+			"fee":               order.Fee,
+			"receivingWalletId": receivingWalletFor(svc, order.CurrencyID),
+			"currencyId":        order.CurrencyID,
+		},
 	}
-	if err := o.transition(ctx, order, domain.OrderCompleted); err != nil {
+	if err := o.transitionWithOutbox(ctx, order, domain.OrderCompleted, entry); err != nil {
 		return order, err
 	}
 	return order, nil
 }
 
-// fail compensates a frozen order: release held funds and move to RELEASED.
+// fail compensates a frozen order: it moves to FAILED, then to RELEASED with a
+// release outbox entry committed atomically.
 func (o *Orchestrator) fail(ctx context.Context, order *domain.Order) (*domain.Order, error) {
-	// Move to FAILED first (records the failure), then release → RELEASED.
 	if err := o.transition(ctx, order, domain.OrderFailed); err != nil {
 		return order, err
 	}
-	if err := o.ledger.Release(ctx, order.ID); err != nil {
-		return order, fmt.Errorf("release: %w", err)
+	entry := &domain.OutboxEntry{
+		OrderID: order.ID,
+		Op:      domain.OutboxRelease,
+		Payload: map[string]any{},
 	}
-	if err := o.transition(ctx, order, domain.OrderReleased); err != nil {
+	if err := o.transitionWithOutbox(ctx, order, domain.OrderReleased, entry); err != nil {
 		return order, err
 	}
 	return order, nil
@@ -289,6 +294,16 @@ func (o *Orchestrator) transition(ctx context.Context, order *domain.Order, next
 	}
 	order.UpdatedAt = o.now().UTC()
 	return o.orders.Save(ctx, order)
+}
+
+// transitionWithOutbox applies a state change and appends an outbox entry in one
+// transaction.
+func (o *Orchestrator) transitionWithOutbox(ctx context.Context, order *domain.Order, next domain.OrderState, entry *domain.OutboxEntry) error {
+	if err := order.Transition(next); err != nil {
+		return err
+	}
+	order.UpdatedAt = o.now().UTC()
+	return o.orders.SaveWithOutbox(ctx, order, entry)
 }
 
 // ProcessCallback verifies a signed provider webhook and finalizes the order.

@@ -72,13 +72,16 @@ func run(log *slog.Logger) error {
 	registrySrv := server.NewRegistryServer(reg)
 
 	// Payment saga: orchestrator over the order store. The Ledger is a mock for
-	// local runs; the Executor is selected by EXECUTOR_MODE.
+	// local runs; the Executor is selected by EXECUTOR_MODE. The same ledger is
+	// shared with the outbox dispatcher (freeze is synchronous; capture/release
+	// are applied from the outbox).
 	orderRepo := postgres.NewOrderRepository(pool)
 	executor := buildExecutor(cfg, log)
+	ledger := saga.NewMockLedger()
 	orch := saga.New(
 		registryLookup{reg},
 		orderRepo,
-		saga.NewMockLedger(),
+		ledger,
 		executor,
 		saga.StaticDeviceKeyResolver{PEM: cfg.DeviceKeyPEM},
 	)
@@ -88,6 +91,10 @@ func run(log *slog.Logger) error {
 	// service statusUrl before any compensation (query-before-compensate).
 	statusChecker := saga.NewHTTPStatusChecker(5 * time.Second)
 	reconciler := saga.NewReconciler(orch, orderRepo, statusChecker, log)
+
+	// Outbox dispatcher: applies capture/release entries to the ledger,
+	// idempotently, decoupled from the order transition that recorded them.
+	dispatcher := saga.NewDispatcher(orderRepo, ledger, log)
 
 	// Authentication is pluggable: an integrator can replace buildAuthenticator
 	// with their own Authenticator without touching the registry or transport.
@@ -134,6 +141,10 @@ func run(log *slog.Logger) error {
 	go func() {
 		log.Info("reconciler started", "interval", "30s")
 		reconciler.Run(ctx)
+	}()
+	go func() {
+		log.Info("outbox dispatcher started", "interval", "1s")
+		dispatcher.Run(ctx)
 	}()
 
 	select {

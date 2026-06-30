@@ -132,6 +132,15 @@ Invariant: funds are moved to **held** (Ledger.freeze) *before* execute, so a
 confirmed service is guaranteed to settle. On failure the held amount is
 **released** back. The handler is **idempotent on the quote nonce**.
 
+**Transactional outbox.** Capture and release are not applied to the ledger
+inline. Instead the order transition (`→ COMPLETED` / `→ RELEASED`) and an
+`outbox` row are written in **one DB transaction**, so they commit atomically. A
+background **dispatcher** then reads undispatched rows and applies the ledger op
+idempotently (ledger ops are idempotent by orderId), retrying on failure. This
+closes the "capture happened but order not marked" gap (white paper §11): a
+crash between marking the order and touching the ledger leaves a durable outbox
+row that is simply re-applied.
+
 The `Ledger` (freeze/capture/release) and `Executor` (provider executeUrl) are
 **ports**. The Ledger ships as an in-memory mock; the Executor has a real HTTP
 implementation (`EXECUTOR_MODE=http`) that POSTs to each service's `executeUrl`
@@ -180,6 +189,6 @@ vendored under `third_party/` (no Buf Schema Registry auth required).
 - [x] Async webhook callback (`/v1/services/callback`, signed) to finalize PENDING orders
 - [x] Reconciler with query-before-compensate (polls service `statusUrl`)
 - [x] Real HTTP Executor (timeout, idempotent retries with backoff, circuit breaker)
-- [ ] Outbox dispatcher (transactional outbox table ships; dispatcher pending)
+- [x] Transactional outbox + dispatcher (capture/release applied idempotently)
 - [ ] Real Ledger adapter (mock ships today)
 - [ ] Server SDK for service integrators

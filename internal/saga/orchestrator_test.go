@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -109,20 +110,39 @@ func buildSignedPay(t *testing.T) (*domain.Service, string, PayCommand) {
 
 func newOrch(t *testing.T, svc *domain.Service, devPEM string, exec Executor, ledger Ledger) *Orchestrator {
 	t.Helper()
-	return New(
+	o, _ := newOrchWithStore(t, svc, devPEM, exec, ledger)
+	return o
+}
+
+// newOrchWithStore also returns the order/outbox store so tests can drain the
+// outbox (capture/release are applied by the dispatcher, not synchronously).
+func newOrchWithStore(t *testing.T, svc *domain.Service, devPEM string, exec Executor, ledger Ledger) (*Orchestrator, *MemOrderStore) {
+	t.Helper()
+	store := NewMemOrderStore()
+	o := New(
 		staticLookup{svc},
-		NewMemOrderStore(),
+		store,
 		ledger,
 		exec,
 		StaticDeviceKeyResolver{PEM: devPEM},
 		WithIDGen(func() string { return "ord_test" }),
 	)
+	return o, store
+}
+
+// drainOutbox runs the dispatcher once to apply pending ledger ops.
+func drainOutbox(t *testing.T, store OutboxStore, ledger Ledger) {
+	t.Helper()
+	d := NewDispatcher(store, ledger, slog.New(slog.NewTextHandler(testWriter{t}, nil)))
+	if _, err := d.DispatchOnce(context.Background()); err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
 }
 
 func TestPayHappyPath(t *testing.T) {
 	svc, devPEM, cmd := buildSignedPay(t)
 	ledger := NewMockLedger()
-	o := newOrch(t, svc, devPEM, NewMockExecutor(), ledger)
+	o, store := newOrchWithStore(t, svc, devPEM, NewMockExecutor(), ledger)
 
 	order, err := o.Pay(context.Background(), cmd)
 	if err != nil {
@@ -134,8 +154,13 @@ func TestPayHappyPath(t *testing.T) {
 	if order.Net != "4.75" || order.Fee != "0.25" {
 		t.Errorf("net=%s fee=%s, want net=4.75 fee=0.25", order.Net, order.Fee)
 	}
+	// Capture is deferred to the outbox; before dispatch nothing is captured.
+	if _, ok := ledger.Captured(order.ID); ok {
+		t.Error("capture should be deferred to the dispatcher, not applied synchronously")
+	}
+	drainOutbox(t, store, ledger)
 	if _, ok := ledger.Captured(order.ID); !ok {
-		t.Error("expected capture")
+		t.Error("expected capture after dispatch")
 	}
 	if ledger.Released(order.ID) {
 		t.Error("must not release on success")
@@ -146,7 +171,7 @@ func TestPayExecuteFailedCompensates(t *testing.T) {
 	svc, devPEM, cmd := buildSignedPay(t)
 	ledger := NewMockLedger()
 	exec := &MockExecutor{Result: ExecuteResult{Status: ExecuteFailed, Reason: "out of stock"}}
-	o := newOrch(t, svc, devPEM, exec, ledger)
+	o, store := newOrchWithStore(t, svc, devPEM, exec, ledger)
 
 	order, err := o.Pay(context.Background(), cmd)
 	if err != nil {
@@ -155,6 +180,7 @@ func TestPayExecuteFailedCompensates(t *testing.T) {
 	if order.State != domain.OrderReleased {
 		t.Fatalf("state = %s, want RELEASED", order.State)
 	}
+	drainOutbox(t, store, ledger)
 	if !ledger.Released(order.ID) {
 		t.Error("expected release on failure")
 	}

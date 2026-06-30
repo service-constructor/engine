@@ -8,11 +8,15 @@ import (
 	"github.com/nvsces/service-constructor/internal/domain"
 )
 
-// MemOrderStore is an in-memory OrderStore for local runs and tests.
+// MemOrderStore is an in-memory OrderStore (and OutboxStore) for local runs and
+// tests. The outbox lives in the same struct so SaveWithOutbox is atomic under
+// the single mutex.
 type MemOrderStore struct {
 	mu      sync.Mutex
 	byID    map[string]*domain.Order
 	byNonce map[string]string // serviceID|nonce -> orderID
+	outbox  []*domain.OutboxEntry
+	nextID  int64
 }
 
 // NewMemOrderStore builds an empty store.
@@ -70,6 +74,51 @@ func (s *MemOrderStore) Save(_ context.Context, o *domain.Order) error {
 	}
 	cp := *o
 	s.byID[o.ID] = &cp
+	return nil
+}
+
+func (s *MemOrderStore) SaveWithOutbox(_ context.Context, o *domain.Order, entry *domain.OutboxEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.byID[o.ID]; !ok {
+		return domain.ErrOrderNotFound
+	}
+	cp := *o
+	s.byID[o.ID] = &cp
+	s.nextID++
+	e := *entry
+	e.ID = s.nextID
+	s.outbox = append(s.outbox, &e)
+	return nil
+}
+
+func (s *MemOrderStore) ListUndispatched(_ context.Context, limit int) ([]*domain.OutboxEntry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []*domain.OutboxEntry
+	for _, e := range s.outbox {
+		if e.DispatchedAt != nil {
+			continue
+		}
+		cp := *e
+		out = append(out, &cp)
+		if limit > 0 && len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+func (s *MemOrderStore) MarkDispatched(_ context.Context, id int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range s.outbox {
+		if e.ID == id {
+			now := time.Now().UTC()
+			e.DispatchedAt = &now
+			return nil
+		}
+	}
 	return nil
 }
 

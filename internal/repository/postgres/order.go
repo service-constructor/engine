@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/nvsces/service-constructor/internal/domain"
@@ -72,9 +73,15 @@ func (r *OrderRepository) FindByNonce(ctx context.Context, serviceID, nonce stri
 	return o, nil
 }
 
-func (r *OrderRepository) Save(ctx context.Context, o *domain.Order) error {
+// pgExecutor is satisfied by both *pgxpool.Pool and pgx.Tx, so the order UPDATE
+// can run either standalone or inside a transaction.
+type pgExecutor interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func saveOrder(ctx context.Context, db pgExecutor, o *domain.Order) error {
 	meta := marshalMeta(o.Metadata)
-	tag, err := r.pool.Exec(ctx, `
+	tag, err := db.Exec(ctx, `
 		UPDATE orders SET
 			wallet_id = $2, amount = $3, currency_id = $4, fee = $5, net = $6,
 			external_ref = $7, metadata = $8, state = $9, freeze_expires_at = $10,
@@ -88,6 +95,81 @@ func (r *OrderRepository) Save(ctx context.Context, o *domain.Order) error {
 	}
 	if tag.RowsAffected() == 0 {
 		return domain.ErrOrderNotFound
+	}
+	return nil
+}
+
+func (r *OrderRepository) Save(ctx context.Context, o *domain.Order) error {
+	return saveOrder(ctx, r.pool, o)
+}
+
+// SaveWithOutbox persists the order transition and the outbox entry in one
+// transaction, so they commit atomically (white paper section 11).
+func (r *OrderRepository) SaveWithOutbox(ctx context.Context, o *domain.Order, entry *domain.OutboxEntry) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) // no-op after Commit
+
+	if err := saveOrder(ctx, tx, o); err != nil {
+		return err
+	}
+	payload, err := json.Marshal(entry.Payload)
+	if err != nil {
+		return fmt.Errorf("marshal outbox payload: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO outbox (order_id, op, payload) VALUES ($1,$2,$3)`,
+		entry.OrderID, string(entry.Op), payload,
+	); err != nil {
+		return fmt.Errorf("insert outbox: %w", err)
+	}
+	return tx.Commit(ctx)
+}
+
+// ListUndispatched returns pending outbox entries in insertion order.
+func (r *OrderRepository) ListUndispatched(ctx context.Context, limit int) ([]*domain.OutboxEntry, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, order_id, op, payload, created_at, dispatched_at
+		FROM outbox WHERE dispatched_at IS NULL
+		ORDER BY id LIMIT $1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list outbox: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.OutboxEntry
+	for rows.Next() {
+		var (
+			e            domain.OutboxEntry
+			op           string
+			payload      []byte
+			dispatchedAt *time.Time
+		)
+		if err := rows.Scan(&e.ID, &e.OrderID, &op, &payload, &e.CreatedAt, &dispatchedAt); err != nil {
+			return nil, fmt.Errorf("scan outbox: %w", err)
+		}
+		e.Op = domain.OutboxOp(op)
+		e.DispatchedAt = dispatchedAt
+		if len(payload) > 0 {
+			if err := json.Unmarshal(payload, &e.Payload); err != nil {
+				return nil, fmt.Errorf("decode outbox payload: %w", err)
+			}
+		}
+		out = append(out, &e)
+	}
+	return out, rows.Err()
+}
+
+// MarkDispatched records that an outbox entry's side-effect was applied.
+func (r *OrderRepository) MarkDispatched(ctx context.Context, id int64) error {
+	_, err := r.pool.Exec(ctx, `UPDATE outbox SET dispatched_at = now() WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("mark dispatched: %w", err)
 	}
 	return nil
 }
