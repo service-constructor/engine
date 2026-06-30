@@ -5,7 +5,19 @@ import (
 
 	scv1 "github.com/nvsces/service-constructor/gen/serviceconstructor/v1"
 	"github.com/nvsces/service-constructor/internal/domain"
+	"github.com/nvsces/service-constructor/internal/keygen"
 )
+
+// algToDomain maps the proto key algorithm enum to the keygen algorithm.
+// UNSPECIFIED falls back to Ed25519 (the keygen default).
+func algToDomain(a scv1.KeyAlgorithm) keygen.Algorithm {
+	switch a {
+	case scv1.KeyAlgorithm_KEY_ALGORITHM_EC_P256:
+		return keygen.AlgorithmECP256
+	default:
+		return keygen.AlgorithmEd25519
+	}
+}
 
 // statusToDomain converts a proto enum to the domain status. UNSPECIFIED maps
 // to an empty Status, which the registry treats as "default / match all".

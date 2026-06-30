@@ -88,6 +88,26 @@ func (s *RegistryServer) DeleteService(ctx context.Context, req *scv1.DeleteServ
 	return &scv1.DeleteServiceResponse{}, nil
 }
 
+func (s *RegistryServer) GenerateServiceKey(ctx context.Context, req *scv1.GenerateServiceKeyRequest) (*scv1.GenerateServiceKeyResponse, error) {
+	return s.generateKey(ctx, req.GetServiceId(), req.GetAlgorithm(), "")
+}
+
+func (s *RegistryServer) RotateServiceKey(ctx context.Context, req *scv1.RotateServiceKeyRequest) (*scv1.GenerateServiceKeyResponse, error) {
+	return s.generateKey(ctx, req.GetServiceId(), req.GetAlgorithm(), req.GetRetireKid())
+}
+
+func (s *RegistryServer) generateKey(ctx context.Context, serviceID string, alg scv1.KeyAlgorithm, retireKID string) (*scv1.GenerateServiceKeyResponse, error) {
+	svc, pair, err := s.reg.GenerateKey(ctx, serviceID, algToDomain(alg), retireKID)
+	if err != nil {
+		return nil, toStatus(err)
+	}
+	return &scv1.GenerateServiceKeyResponse{
+		PublicKey:     &scv1.PublicKey{Kid: pair.KID, Pem: pair.PublicKeyPEM},
+		PrivateKeyPem: pair.PrivateKeyPEM,
+		Service:       domainToProto(svc),
+	}, nil
+}
+
 // mergeUpdate returns current with the fields named in paths overwritten from
 // the inbound proto. An empty paths slice means "replace all mutable fields".
 //

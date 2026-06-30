@@ -5,6 +5,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	scv1 "github.com/nvsces/service-constructor/gen/serviceconstructor/v1"
+	"github.com/nvsces/service-constructor/internal/auth"
 	"github.com/nvsces/service-constructor/internal/config"
 	"github.com/nvsces/service-constructor/internal/repository/postgres"
 	"github.com/nvsces/service-constructor/internal/server"
@@ -56,7 +58,15 @@ func run(log *slog.Logger) error {
 	reg := service.NewRegistry(repo)
 	registrySrv := server.NewRegistryServer(reg)
 
-	grpcServer := grpc.NewServer()
+	// Authentication is pluggable: an integrator can replace buildAuthenticator
+	// with their own Authenticator without touching the registry or transport.
+	authn, err := buildAuthenticator(cfg, log)
+	if err != nil {
+		return err
+	}
+	interceptor := auth.UnaryServerInterceptor(authn, auth.AdminMethods, auth.RoleAdmin)
+
+	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(interceptor))
 	scv1.RegisterServiceRegistryServer(grpcServer, registrySrv)
 
 	// gRPC listener.
@@ -103,4 +113,20 @@ func run(log *slog.Logger) error {
 	grpcServer.GracefulStop()
 	log.Info("shutdown complete")
 	return nil
+}
+
+// buildAuthenticator selects the built-in Authenticator from config. Integrators
+// adopting this module can replace this function with one that returns their own
+// auth.Authenticator implementation.
+func buildAuthenticator(cfg config.Config, log *slog.Logger) (auth.Authenticator, error) {
+	switch cfg.AuthMode {
+	case "none":
+		log.Warn("AUTH_MODE=none: admin API is UNAUTHENTICATED — do not use in production")
+		return auth.AllowAll{}, nil
+	case "jwt", "":
+		log.Info("using JWT authenticator")
+		return auth.NewJWTAuthenticator([]byte(cfg.AuthJWTSecret)), nil
+	default:
+		return nil, fmt.Errorf("unknown AUTH_MODE %q", cfg.AuthMode)
+	}
 }

@@ -50,6 +50,26 @@ service ServiceRegistry {
       delete: "/v1/admin/services/{service_id}"
     };
   }
+
+  // GenerateServiceKey creates a fresh asymmetric key pair for the service,
+  // stores the public part (with a new kid) in the registry, and returns the
+  // private key PEM ONCE. The platform never persists the private key.
+  rpc GenerateServiceKey(GenerateServiceKeyRequest) returns (GenerateServiceKeyResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/services/{service_id}/keys"
+      body: "*"
+    };
+  }
+
+  // RotateServiceKey generates a new key pair and revokes an existing kid after
+  // an overlap window, supporting zero-downtime rotation. Returns the new
+  // private key PEM once.
+  rpc RotateServiceKey(RotateServiceKeyRequest) returns (GenerateServiceKeyResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/services/{service_id}/rotate-key"
+      body: "*"
+    };
+  }
 }
 
 // ServiceStatus is the lifecycle state of a registered service.
@@ -160,3 +180,36 @@ message DeleteServiceRequest {
 }
 
 message DeleteServiceResponse {}
+
+// KeyAlgorithm selects the asymmetric algorithm for a generated key pair.
+enum KeyAlgorithm {
+  KEY_ALGORITHM_UNSPECIFIED = 0;
+  // Ed25519: default; small, fast, modern signatures.
+  KEY_ALGORITHM_ED25519 = 1;
+  // EC P-256 (ECDSA).
+  KEY_ALGORITHM_EC_P256 = 2;
+}
+
+message GenerateServiceKeyRequest {
+  string service_id = 1;
+  // Algorithm for the new key; UNSPECIFIED defaults to Ed25519.
+  KeyAlgorithm algorithm = 2;
+}
+
+message RotateServiceKeyRequest {
+  string service_id = 1;
+  KeyAlgorithm algorithm = 2;
+  // kid of the key to retire. It remains valid until retire_at to allow an
+  // overlap window; if empty, no existing key is retired.
+  string retire_kid = 3;
+}
+
+message GenerateServiceKeyResponse {
+  // The newly registered public key (kid + PEM).
+  PublicKey public_key = 1;
+  // Private key PEM, returned ONCE and never stored by the platform. The
+  // integrator must capture it now.
+  string private_key_pem = 2;
+  // The service after the key was added.
+  Service service = 3;
+}

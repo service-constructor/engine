@@ -37,22 +37,54 @@ Layers (clean separation, transport- and storage-agnostic core):
 # 1. Start Postgres
 make docker-up
 
-# 2. Run the server (applies migrations on startup)
-make run
+# 2. Run the API (applies migrations on startup)
+AUTH_MODE=none make run        # dev: no auth; or AUTH_JWT_SECRET=... make run
+
+# 3. Run the admin UI (separate terminal)
+cd admin-ui && npm install && npm run dev   # http://localhost:5173
 ```
 
 Defaults (override via env): `GRPC_ADDR=:9090`, `HTTP_ADDR=:8080`,
-`DATABASE_URL=postgres://sc:sc@localhost:5432/service_constructor?sslmode=disable`.
+`DATABASE_URL=postgres://sc:sc@localhost:5432/service_constructor?sslmode=disable`,
+`AUTH_MODE=jwt` (requires `AUTH_JWT_SECRET`).
+
+## Authentication (pluggable)
+
+Auth is a replaceable boundary on **both** ends so an integrator can wire in
+their existing identity system without forking the app:
+
+- **Backend** — implement `auth.Authenticator` (`internal/auth`) and pass it to
+  the gRPC interceptor. Built-ins: `jwt` (HMAC JWT, reads `Authorization:
+  Bearer`) and `none` (dev only, accepts everything). Selected via `AUTH_MODE`;
+  swap `buildAuthenticator` in `cmd/server/main.go` for a custom one.
+- **Frontend** — implement the `TokenProvider` interface
+  (`admin-ui/src/auth/types.ts`) and change the one export in
+  `admin-ui/src/auth/index.ts`. The default keeps a token in localStorage; swap
+  it to source the token from an SSO cookie, OAuth flow, etc.
+
+The admin API requires the `admin` role; the interceptor returns `401` when
+unauthenticated and `403` without the role.
+
+## Admin UI
+
+`admin-ui/` is a React + Vite + TypeScript SPA: list, create, edit and delete
+services, plus generate/rotate service keys. Key generation runs on the backend
+(Ed25519 or EC P-256); the **private key PEM is returned once** and never stored
+— the UI shows a copy/download dialog. In dev, Vite proxies `/v1` to the gateway
+on `:8080`; in prod, co-host the built `dist/` behind the API or set
+`VITE_API_BASE`.
 
 ## REST API (via gateway)
 
 | Method & path                          | Purpose          |
 |----------------------------------------|------------------|
-| `POST   /v1/admin/services`            | Create a service |
-| `GET    /v1/admin/services/{id}`       | Get a service    |
-| `GET    /v1/admin/services`            | List (paginated) |
-| `PATCH  /v1/admin/services/{id}`       | Partial update   |
-| `DELETE /v1/admin/services/{id}`       | Delete           |
+| `POST   /v1/admin/services`               | Create a service          |
+| `GET    /v1/admin/services/{id}`          | Get a service             |
+| `GET    /v1/admin/services`               | List (paginated)          |
+| `PATCH  /v1/admin/services/{id}`          | Partial update            |
+| `DELETE /v1/admin/services/{id}`          | Delete                    |
+| `POST   /v1/admin/services/{id}/keys`     | Generate a key pair       |
+| `POST   /v1/admin/services/{id}/rotate-key` | Rotate (new key + retire) |
 
 List supports `pageSize`, `pageToken` (keyset cursor) and `status` filter.
 `PATCH` uses field-mask semantics: only fields present in the JSON body change.
@@ -86,6 +118,9 @@ vendored under `third_party/` (no Buf Schema Registry auth required).
 ## Roadmap
 
 - [x] Service Registry CRUD (gRPC + HTTP gateway, Postgres)
+- [x] Pluggable admin auth (backend `Authenticator` + frontend `TokenProvider`)
+- [x] Service key generation/rotation (Ed25519 / EC P-256)
+- [x] Admin UI (React + Vite + TS)
 - [ ] Signed quote + device-signed consent verification
 - [ ] Payment saga: `freeze → execute → capture` with compensation
 - [ ] Reconciler (query-before-compensate) and outbox dispatcher

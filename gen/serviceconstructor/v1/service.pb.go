@@ -80,6 +80,58 @@ func (ServiceStatus) EnumDescriptor() ([]byte, []int) {
 	return file_serviceconstructor_v1_service_proto_rawDescGZIP(), []int{0}
 }
 
+// KeyAlgorithm selects the asymmetric algorithm for a generated key pair.
+type KeyAlgorithm int32
+
+const (
+	KeyAlgorithm_KEY_ALGORITHM_UNSPECIFIED KeyAlgorithm = 0
+	// Ed25519: default; small, fast, modern signatures.
+	KeyAlgorithm_KEY_ALGORITHM_ED25519 KeyAlgorithm = 1
+	// EC P-256 (ECDSA).
+	KeyAlgorithm_KEY_ALGORITHM_EC_P256 KeyAlgorithm = 2
+)
+
+// Enum value maps for KeyAlgorithm.
+var (
+	KeyAlgorithm_name = map[int32]string{
+		0: "KEY_ALGORITHM_UNSPECIFIED",
+		1: "KEY_ALGORITHM_ED25519",
+		2: "KEY_ALGORITHM_EC_P256",
+	}
+	KeyAlgorithm_value = map[string]int32{
+		"KEY_ALGORITHM_UNSPECIFIED": 0,
+		"KEY_ALGORITHM_ED25519":     1,
+		"KEY_ALGORITHM_EC_P256":     2,
+	}
+)
+
+func (x KeyAlgorithm) Enum() *KeyAlgorithm {
+	p := new(KeyAlgorithm)
+	*p = x
+	return p
+}
+
+func (x KeyAlgorithm) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (KeyAlgorithm) Descriptor() protoreflect.EnumDescriptor {
+	return file_serviceconstructor_v1_service_proto_enumTypes[1].Descriptor()
+}
+
+func (KeyAlgorithm) Type() protoreflect.EnumType {
+	return &file_serviceconstructor_v1_service_proto_enumTypes[1]
+}
+
+func (x KeyAlgorithm) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use KeyAlgorithm.Descriptor instead.
+func (KeyAlgorithm) EnumDescriptor() ([]byte, []int) {
+	return file_serviceconstructor_v1_service_proto_rawDescGZIP(), []int{1}
+}
+
 // PublicKey is one of the service's asymmetric keys used to verify quote and
 // webhook signatures. The private counterpart never leaves the service.
 type PublicKey struct {
@@ -784,6 +836,185 @@ func (*DeleteServiceResponse) Descriptor() ([]byte, []int) {
 	return file_serviceconstructor_v1_service_proto_rawDescGZIP(), []int{11}
 }
 
+type GenerateServiceKeyRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ServiceId string                 `protobuf:"bytes,1,opt,name=service_id,json=serviceId,proto3" json:"service_id,omitempty"`
+	// Algorithm for the new key; UNSPECIFIED defaults to Ed25519.
+	Algorithm     KeyAlgorithm `protobuf:"varint,2,opt,name=algorithm,proto3,enum=serviceconstructor.v1.KeyAlgorithm" json:"algorithm,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GenerateServiceKeyRequest) Reset() {
+	*x = GenerateServiceKeyRequest{}
+	mi := &file_serviceconstructor_v1_service_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GenerateServiceKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GenerateServiceKeyRequest) ProtoMessage() {}
+
+func (x *GenerateServiceKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_serviceconstructor_v1_service_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GenerateServiceKeyRequest.ProtoReflect.Descriptor instead.
+func (*GenerateServiceKeyRequest) Descriptor() ([]byte, []int) {
+	return file_serviceconstructor_v1_service_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *GenerateServiceKeyRequest) GetServiceId() string {
+	if x != nil {
+		return x.ServiceId
+	}
+	return ""
+}
+
+func (x *GenerateServiceKeyRequest) GetAlgorithm() KeyAlgorithm {
+	if x != nil {
+		return x.Algorithm
+	}
+	return KeyAlgorithm_KEY_ALGORITHM_UNSPECIFIED
+}
+
+type RotateServiceKeyRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ServiceId string                 `protobuf:"bytes,1,opt,name=service_id,json=serviceId,proto3" json:"service_id,omitempty"`
+	Algorithm KeyAlgorithm           `protobuf:"varint,2,opt,name=algorithm,proto3,enum=serviceconstructor.v1.KeyAlgorithm" json:"algorithm,omitempty"`
+	// kid of the key to retire. It remains valid until retire_at to allow an
+	// overlap window; if empty, no existing key is retired.
+	RetireKid     string `protobuf:"bytes,3,opt,name=retire_kid,json=retireKid,proto3" json:"retire_kid,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RotateServiceKeyRequest) Reset() {
+	*x = RotateServiceKeyRequest{}
+	mi := &file_serviceconstructor_v1_service_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RotateServiceKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RotateServiceKeyRequest) ProtoMessage() {}
+
+func (x *RotateServiceKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_serviceconstructor_v1_service_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RotateServiceKeyRequest.ProtoReflect.Descriptor instead.
+func (*RotateServiceKeyRequest) Descriptor() ([]byte, []int) {
+	return file_serviceconstructor_v1_service_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *RotateServiceKeyRequest) GetServiceId() string {
+	if x != nil {
+		return x.ServiceId
+	}
+	return ""
+}
+
+func (x *RotateServiceKeyRequest) GetAlgorithm() KeyAlgorithm {
+	if x != nil {
+		return x.Algorithm
+	}
+	return KeyAlgorithm_KEY_ALGORITHM_UNSPECIFIED
+}
+
+func (x *RotateServiceKeyRequest) GetRetireKid() string {
+	if x != nil {
+		return x.RetireKid
+	}
+	return ""
+}
+
+type GenerateServiceKeyResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The newly registered public key (kid + PEM).
+	PublicKey *PublicKey `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
+	// Private key PEM, returned ONCE and never stored by the platform. The
+	// integrator must capture it now.
+	PrivateKeyPem string `protobuf:"bytes,2,opt,name=private_key_pem,json=privateKeyPem,proto3" json:"private_key_pem,omitempty"`
+	// The service after the key was added.
+	Service       *Service `protobuf:"bytes,3,opt,name=service,proto3" json:"service,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GenerateServiceKeyResponse) Reset() {
+	*x = GenerateServiceKeyResponse{}
+	mi := &file_serviceconstructor_v1_service_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GenerateServiceKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GenerateServiceKeyResponse) ProtoMessage() {}
+
+func (x *GenerateServiceKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_serviceconstructor_v1_service_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GenerateServiceKeyResponse.ProtoReflect.Descriptor instead.
+func (*GenerateServiceKeyResponse) Descriptor() ([]byte, []int) {
+	return file_serviceconstructor_v1_service_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *GenerateServiceKeyResponse) GetPublicKey() *PublicKey {
+	if x != nil {
+		return x.PublicKey
+	}
+	return nil
+}
+
+func (x *GenerateServiceKeyResponse) GetPrivateKeyPem() string {
+	if x != nil {
+		return x.PrivateKeyPem
+	}
+	return ""
+}
+
+func (x *GenerateServiceKeyResponse) GetService() *Service {
+	if x != nil {
+		return x.Service
+	}
+	return nil
+}
+
 var File_serviceconstructor_v1_service_proto protoreflect.FileDescriptor
 
 const file_serviceconstructor_v1_service_proto_rawDesc = "" +
@@ -843,19 +1074,40 @@ const file_serviceconstructor_v1_service_proto_rawDesc = "" +
 	"\x14DeleteServiceRequest\x12\x1d\n" +
 	"\n" +
 	"service_id\x18\x01 \x01(\tR\tserviceId\"\x17\n" +
-	"\x15DeleteServiceResponse*\x82\x01\n" +
+	"\x15DeleteServiceResponse\"}\n" +
+	"\x19GenerateServiceKeyRequest\x12\x1d\n" +
+	"\n" +
+	"service_id\x18\x01 \x01(\tR\tserviceId\x12A\n" +
+	"\talgorithm\x18\x02 \x01(\x0e2#.serviceconstructor.v1.KeyAlgorithmR\talgorithm\"\x9a\x01\n" +
+	"\x17RotateServiceKeyRequest\x12\x1d\n" +
+	"\n" +
+	"service_id\x18\x01 \x01(\tR\tserviceId\x12A\n" +
+	"\talgorithm\x18\x02 \x01(\x0e2#.serviceconstructor.v1.KeyAlgorithmR\talgorithm\x12\x1d\n" +
+	"\n" +
+	"retire_kid\x18\x03 \x01(\tR\tretireKid\"\xbf\x01\n" +
+	"\x1aGenerateServiceKeyResponse\x12?\n" +
+	"\n" +
+	"public_key\x18\x01 \x01(\v2 .serviceconstructor.v1.PublicKeyR\tpublicKey\x12&\n" +
+	"\x0fprivate_key_pem\x18\x02 \x01(\tR\rprivateKeyPem\x128\n" +
+	"\aservice\x18\x03 \x01(\v2\x1e.serviceconstructor.v1.ServiceR\aservice*\x82\x01\n" +
 	"\rServiceStatus\x12\x1e\n" +
 	"\x1aSERVICE_STATUS_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14SERVICE_STATUS_DRAFT\x10\x01\x12\x19\n" +
 	"\x15SERVICE_STATUS_ACTIVE\x10\x02\x12\x1c\n" +
-	"\x18SERVICE_STATUS_SUSPENDED\x10\x032\xcb\x05\n" +
+	"\x18SERVICE_STATUS_SUSPENDED\x10\x03*c\n" +
+	"\fKeyAlgorithm\x12\x1d\n" +
+	"\x19KEY_ALGORITHM_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15KEY_ALGORITHM_ED25519\x10\x01\x12\x19\n" +
+	"\x15KEY_ALGORITHM_EC_P256\x10\x022\xa7\b\n" +
 	"\x0fServiceRegistry\x12\x81\x01\n" +
 	"\rCreateService\x12+.serviceconstructor.v1.CreateServiceRequest\x1a\x1e.serviceconstructor.v1.Service\"#\x82\xd3\xe4\x93\x02\x1d:\aservice\"\x12/v1/admin/services\x12\x7f\n" +
 	"\n" +
 	"GetService\x12(.serviceconstructor.v1.GetServiceRequest\x1a\x1e.serviceconstructor.v1.Service\"'\x82\xd3\xe4\x93\x02!\x12\x1f/v1/admin/services/{service_id}\x12\x83\x01\n" +
 	"\fListServices\x12*.serviceconstructor.v1.ListServicesRequest\x1a+.serviceconstructor.v1.ListServicesResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/admin/services\x12\x96\x01\n" +
 	"\rUpdateService\x12+.serviceconstructor.v1.UpdateServiceRequest\x1a\x1e.serviceconstructor.v1.Service\"8\x82\xd3\xe4\x93\x022:\aservice2'/v1/admin/services/{service.service_id}\x12\x93\x01\n" +
-	"\rDeleteService\x12+.serviceconstructor.v1.DeleteServiceRequest\x1a,.serviceconstructor.v1.DeleteServiceResponse\"'\x82\xd3\xe4\x93\x02!*\x1f/v1/admin/services/{service_id}BFZDgithub.com/nvsces/service-constructor/gen/serviceconstructor/v1;scv1b\x06proto3"
+	"\rDeleteService\x12+.serviceconstructor.v1.DeleteServiceRequest\x1a,.serviceconstructor.v1.DeleteServiceResponse\"'\x82\xd3\xe4\x93\x02!*\x1f/v1/admin/services/{service_id}\x12\xaa\x01\n" +
+	"\x12GenerateServiceKey\x120.serviceconstructor.v1.GenerateServiceKeyRequest\x1a1.serviceconstructor.v1.GenerateServiceKeyResponse\"/\x82\xd3\xe4\x93\x02):\x01*\"$/v1/admin/services/{service_id}/keys\x12\xac\x01\n" +
+	"\x10RotateServiceKey\x12..serviceconstructor.v1.RotateServiceKeyRequest\x1a1.serviceconstructor.v1.GenerateServiceKeyResponse\"5\x82\xd3\xe4\x93\x02/:\x01*\"*/v1/admin/services/{service_id}/rotate-keyBFZDgithub.com/nvsces/service-constructor/gen/serviceconstructor/v1;scv1b\x06proto3"
 
 var (
 	file_serviceconstructor_v1_service_proto_rawDescOnce sync.Once
@@ -869,53 +1121,65 @@ func file_serviceconstructor_v1_service_proto_rawDescGZIP() []byte {
 	return file_serviceconstructor_v1_service_proto_rawDescData
 }
 
-var file_serviceconstructor_v1_service_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_serviceconstructor_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_serviceconstructor_v1_service_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_serviceconstructor_v1_service_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_serviceconstructor_v1_service_proto_goTypes = []any{
-	(ServiceStatus)(0),            // 0: serviceconstructor.v1.ServiceStatus
-	(*PublicKey)(nil),             // 1: serviceconstructor.v1.PublicKey
-	(*ReceivingWallet)(nil),       // 2: serviceconstructor.v1.ReceivingWallet
-	(*Fee)(nil),                   // 3: serviceconstructor.v1.Fee
-	(*Limits)(nil),                // 4: serviceconstructor.v1.Limits
-	(*Service)(nil),               // 5: serviceconstructor.v1.Service
-	(*CreateServiceRequest)(nil),  // 6: serviceconstructor.v1.CreateServiceRequest
-	(*GetServiceRequest)(nil),     // 7: serviceconstructor.v1.GetServiceRequest
-	(*ListServicesRequest)(nil),   // 8: serviceconstructor.v1.ListServicesRequest
-	(*ListServicesResponse)(nil),  // 9: serviceconstructor.v1.ListServicesResponse
-	(*UpdateServiceRequest)(nil),  // 10: serviceconstructor.v1.UpdateServiceRequest
-	(*DeleteServiceRequest)(nil),  // 11: serviceconstructor.v1.DeleteServiceRequest
-	(*DeleteServiceResponse)(nil), // 12: serviceconstructor.v1.DeleteServiceResponse
-	(*timestamppb.Timestamp)(nil), // 13: google.protobuf.Timestamp
-	(*fieldmaskpb.FieldMask)(nil), // 14: google.protobuf.FieldMask
+	(ServiceStatus)(0),                 // 0: serviceconstructor.v1.ServiceStatus
+	(KeyAlgorithm)(0),                  // 1: serviceconstructor.v1.KeyAlgorithm
+	(*PublicKey)(nil),                  // 2: serviceconstructor.v1.PublicKey
+	(*ReceivingWallet)(nil),            // 3: serviceconstructor.v1.ReceivingWallet
+	(*Fee)(nil),                        // 4: serviceconstructor.v1.Fee
+	(*Limits)(nil),                     // 5: serviceconstructor.v1.Limits
+	(*Service)(nil),                    // 6: serviceconstructor.v1.Service
+	(*CreateServiceRequest)(nil),       // 7: serviceconstructor.v1.CreateServiceRequest
+	(*GetServiceRequest)(nil),          // 8: serviceconstructor.v1.GetServiceRequest
+	(*ListServicesRequest)(nil),        // 9: serviceconstructor.v1.ListServicesRequest
+	(*ListServicesResponse)(nil),       // 10: serviceconstructor.v1.ListServicesResponse
+	(*UpdateServiceRequest)(nil),       // 11: serviceconstructor.v1.UpdateServiceRequest
+	(*DeleteServiceRequest)(nil),       // 12: serviceconstructor.v1.DeleteServiceRequest
+	(*DeleteServiceResponse)(nil),      // 13: serviceconstructor.v1.DeleteServiceResponse
+	(*GenerateServiceKeyRequest)(nil),  // 14: serviceconstructor.v1.GenerateServiceKeyRequest
+	(*RotateServiceKeyRequest)(nil),    // 15: serviceconstructor.v1.RotateServiceKeyRequest
+	(*GenerateServiceKeyResponse)(nil), // 16: serviceconstructor.v1.GenerateServiceKeyResponse
+	(*timestamppb.Timestamp)(nil),      // 17: google.protobuf.Timestamp
+	(*fieldmaskpb.FieldMask)(nil),      // 18: google.protobuf.FieldMask
 }
 var file_serviceconstructor_v1_service_proto_depIdxs = []int32{
-	1,  // 0: serviceconstructor.v1.Service.public_keys:type_name -> serviceconstructor.v1.PublicKey
-	2,  // 1: serviceconstructor.v1.Service.receiving_wallets:type_name -> serviceconstructor.v1.ReceivingWallet
-	3,  // 2: serviceconstructor.v1.Service.fee:type_name -> serviceconstructor.v1.Fee
-	4,  // 3: serviceconstructor.v1.Service.limits:type_name -> serviceconstructor.v1.Limits
+	2,  // 0: serviceconstructor.v1.Service.public_keys:type_name -> serviceconstructor.v1.PublicKey
+	3,  // 1: serviceconstructor.v1.Service.receiving_wallets:type_name -> serviceconstructor.v1.ReceivingWallet
+	4,  // 2: serviceconstructor.v1.Service.fee:type_name -> serviceconstructor.v1.Fee
+	5,  // 3: serviceconstructor.v1.Service.limits:type_name -> serviceconstructor.v1.Limits
 	0,  // 4: serviceconstructor.v1.Service.status:type_name -> serviceconstructor.v1.ServiceStatus
-	13, // 5: serviceconstructor.v1.Service.created_at:type_name -> google.protobuf.Timestamp
-	13, // 6: serviceconstructor.v1.Service.updated_at:type_name -> google.protobuf.Timestamp
-	5,  // 7: serviceconstructor.v1.CreateServiceRequest.service:type_name -> serviceconstructor.v1.Service
+	17, // 5: serviceconstructor.v1.Service.created_at:type_name -> google.protobuf.Timestamp
+	17, // 6: serviceconstructor.v1.Service.updated_at:type_name -> google.protobuf.Timestamp
+	6,  // 7: serviceconstructor.v1.CreateServiceRequest.service:type_name -> serviceconstructor.v1.Service
 	0,  // 8: serviceconstructor.v1.ListServicesRequest.status:type_name -> serviceconstructor.v1.ServiceStatus
-	5,  // 9: serviceconstructor.v1.ListServicesResponse.services:type_name -> serviceconstructor.v1.Service
-	5,  // 10: serviceconstructor.v1.UpdateServiceRequest.service:type_name -> serviceconstructor.v1.Service
-	14, // 11: serviceconstructor.v1.UpdateServiceRequest.update_mask:type_name -> google.protobuf.FieldMask
-	6,  // 12: serviceconstructor.v1.ServiceRegistry.CreateService:input_type -> serviceconstructor.v1.CreateServiceRequest
-	7,  // 13: serviceconstructor.v1.ServiceRegistry.GetService:input_type -> serviceconstructor.v1.GetServiceRequest
-	8,  // 14: serviceconstructor.v1.ServiceRegistry.ListServices:input_type -> serviceconstructor.v1.ListServicesRequest
-	10, // 15: serviceconstructor.v1.ServiceRegistry.UpdateService:input_type -> serviceconstructor.v1.UpdateServiceRequest
-	11, // 16: serviceconstructor.v1.ServiceRegistry.DeleteService:input_type -> serviceconstructor.v1.DeleteServiceRequest
-	5,  // 17: serviceconstructor.v1.ServiceRegistry.CreateService:output_type -> serviceconstructor.v1.Service
-	5,  // 18: serviceconstructor.v1.ServiceRegistry.GetService:output_type -> serviceconstructor.v1.Service
-	9,  // 19: serviceconstructor.v1.ServiceRegistry.ListServices:output_type -> serviceconstructor.v1.ListServicesResponse
-	5,  // 20: serviceconstructor.v1.ServiceRegistry.UpdateService:output_type -> serviceconstructor.v1.Service
-	12, // 21: serviceconstructor.v1.ServiceRegistry.DeleteService:output_type -> serviceconstructor.v1.DeleteServiceResponse
-	17, // [17:22] is the sub-list for method output_type
-	12, // [12:17] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	6,  // 9: serviceconstructor.v1.ListServicesResponse.services:type_name -> serviceconstructor.v1.Service
+	6,  // 10: serviceconstructor.v1.UpdateServiceRequest.service:type_name -> serviceconstructor.v1.Service
+	18, // 11: serviceconstructor.v1.UpdateServiceRequest.update_mask:type_name -> google.protobuf.FieldMask
+	1,  // 12: serviceconstructor.v1.GenerateServiceKeyRequest.algorithm:type_name -> serviceconstructor.v1.KeyAlgorithm
+	1,  // 13: serviceconstructor.v1.RotateServiceKeyRequest.algorithm:type_name -> serviceconstructor.v1.KeyAlgorithm
+	2,  // 14: serviceconstructor.v1.GenerateServiceKeyResponse.public_key:type_name -> serviceconstructor.v1.PublicKey
+	6,  // 15: serviceconstructor.v1.GenerateServiceKeyResponse.service:type_name -> serviceconstructor.v1.Service
+	7,  // 16: serviceconstructor.v1.ServiceRegistry.CreateService:input_type -> serviceconstructor.v1.CreateServiceRequest
+	8,  // 17: serviceconstructor.v1.ServiceRegistry.GetService:input_type -> serviceconstructor.v1.GetServiceRequest
+	9,  // 18: serviceconstructor.v1.ServiceRegistry.ListServices:input_type -> serviceconstructor.v1.ListServicesRequest
+	11, // 19: serviceconstructor.v1.ServiceRegistry.UpdateService:input_type -> serviceconstructor.v1.UpdateServiceRequest
+	12, // 20: serviceconstructor.v1.ServiceRegistry.DeleteService:input_type -> serviceconstructor.v1.DeleteServiceRequest
+	14, // 21: serviceconstructor.v1.ServiceRegistry.GenerateServiceKey:input_type -> serviceconstructor.v1.GenerateServiceKeyRequest
+	15, // 22: serviceconstructor.v1.ServiceRegistry.RotateServiceKey:input_type -> serviceconstructor.v1.RotateServiceKeyRequest
+	6,  // 23: serviceconstructor.v1.ServiceRegistry.CreateService:output_type -> serviceconstructor.v1.Service
+	6,  // 24: serviceconstructor.v1.ServiceRegistry.GetService:output_type -> serviceconstructor.v1.Service
+	10, // 25: serviceconstructor.v1.ServiceRegistry.ListServices:output_type -> serviceconstructor.v1.ListServicesResponse
+	6,  // 26: serviceconstructor.v1.ServiceRegistry.UpdateService:output_type -> serviceconstructor.v1.Service
+	13, // 27: serviceconstructor.v1.ServiceRegistry.DeleteService:output_type -> serviceconstructor.v1.DeleteServiceResponse
+	16, // 28: serviceconstructor.v1.ServiceRegistry.GenerateServiceKey:output_type -> serviceconstructor.v1.GenerateServiceKeyResponse
+	16, // 29: serviceconstructor.v1.ServiceRegistry.RotateServiceKey:output_type -> serviceconstructor.v1.GenerateServiceKeyResponse
+	23, // [23:30] is the sub-list for method output_type
+	16, // [16:23] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_serviceconstructor_v1_service_proto_init() }
@@ -928,8 +1192,8 @@ func file_serviceconstructor_v1_service_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_serviceconstructor_v1_service_proto_rawDesc), len(file_serviceconstructor_v1_service_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   12,
+			NumEnums:      2,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

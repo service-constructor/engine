@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/nvsces/service-constructor/internal/domain"
+	"github.com/nvsces/service-constructor/internal/keygen"
 )
 
 // Repository is the persistence port for services.
@@ -138,4 +139,40 @@ func (r *Registry) Delete(ctx context.Context, id string) error {
 		return domain.ErrInvalidArgument
 	}
 	return r.repo.Delete(ctx, id)
+}
+
+// GenerateKey creates a new key pair for the service, appends the public key to
+// the registry record, and returns the private key PEM. The private key is not
+// persisted. If retireKID is non-empty, that key is removed from the record
+// (callers wanting an overlap window simply omit retireKID).
+func (r *Registry) GenerateKey(ctx context.Context, serviceID string, alg keygen.Algorithm, retireKID string) (*domain.Service, keygen.KeyPair, error) {
+	if serviceID == "" {
+		return nil, keygen.KeyPair{}, domain.ErrInvalidArgument
+	}
+	svc, err := r.repo.Get(ctx, serviceID)
+	if err != nil {
+		return nil, keygen.KeyPair{}, err
+	}
+
+	pair, err := keygen.Generate(alg, serviceID)
+	if err != nil {
+		return nil, keygen.KeyPair{}, fmt.Errorf("%w: %v", domain.ErrInvalidArgument, err)
+	}
+
+	if retireKID != "" {
+		kept := svc.PublicKeys[:0]
+		for _, k := range svc.PublicKeys {
+			if k.KID != retireKID {
+				kept = append(kept, k)
+			}
+		}
+		svc.PublicKeys = kept
+	}
+	svc.PublicKeys = append(svc.PublicKeys, domain.PublicKey{KID: pair.KID, PEM: pair.PublicKeyPEM})
+	svc.UpdatedAt = r.now().UTC()
+
+	if err := r.repo.Update(ctx, svc); err != nil {
+		return nil, keygen.KeyPair{}, fmt.Errorf("persist key: %w", err)
+	}
+	return svc, pair, nil
 }

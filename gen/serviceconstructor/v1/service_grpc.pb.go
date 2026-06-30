@@ -19,11 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ServiceRegistry_CreateService_FullMethodName = "/serviceconstructor.v1.ServiceRegistry/CreateService"
-	ServiceRegistry_GetService_FullMethodName    = "/serviceconstructor.v1.ServiceRegistry/GetService"
-	ServiceRegistry_ListServices_FullMethodName  = "/serviceconstructor.v1.ServiceRegistry/ListServices"
-	ServiceRegistry_UpdateService_FullMethodName = "/serviceconstructor.v1.ServiceRegistry/UpdateService"
-	ServiceRegistry_DeleteService_FullMethodName = "/serviceconstructor.v1.ServiceRegistry/DeleteService"
+	ServiceRegistry_CreateService_FullMethodName      = "/serviceconstructor.v1.ServiceRegistry/CreateService"
+	ServiceRegistry_GetService_FullMethodName         = "/serviceconstructor.v1.ServiceRegistry/GetService"
+	ServiceRegistry_ListServices_FullMethodName       = "/serviceconstructor.v1.ServiceRegistry/ListServices"
+	ServiceRegistry_UpdateService_FullMethodName      = "/serviceconstructor.v1.ServiceRegistry/UpdateService"
+	ServiceRegistry_DeleteService_FullMethodName      = "/serviceconstructor.v1.ServiceRegistry/DeleteService"
+	ServiceRegistry_GenerateServiceKey_FullMethodName = "/serviceconstructor.v1.ServiceRegistry/GenerateServiceKey"
+	ServiceRegistry_RotateServiceKey_FullMethodName   = "/serviceconstructor.v1.ServiceRegistry/RotateServiceKey"
 )
 
 // ServiceRegistryClient is the client API for ServiceRegistry service.
@@ -46,6 +48,14 @@ type ServiceRegistryClient interface {
 	UpdateService(ctx context.Context, in *UpdateServiceRequest, opts ...grpc.CallOption) (*Service, error)
 	// DeleteService removes a service from the registry.
 	DeleteService(ctx context.Context, in *DeleteServiceRequest, opts ...grpc.CallOption) (*DeleteServiceResponse, error)
+	// GenerateServiceKey creates a fresh asymmetric key pair for the service,
+	// stores the public part (with a new kid) in the registry, and returns the
+	// private key PEM ONCE. The platform never persists the private key.
+	GenerateServiceKey(ctx context.Context, in *GenerateServiceKeyRequest, opts ...grpc.CallOption) (*GenerateServiceKeyResponse, error)
+	// RotateServiceKey generates a new key pair and revokes an existing kid after
+	// an overlap window, supporting zero-downtime rotation. Returns the new
+	// private key PEM once.
+	RotateServiceKey(ctx context.Context, in *RotateServiceKeyRequest, opts ...grpc.CallOption) (*GenerateServiceKeyResponse, error)
 }
 
 type serviceRegistryClient struct {
@@ -106,6 +116,26 @@ func (c *serviceRegistryClient) DeleteService(ctx context.Context, in *DeleteSer
 	return out, nil
 }
 
+func (c *serviceRegistryClient) GenerateServiceKey(ctx context.Context, in *GenerateServiceKeyRequest, opts ...grpc.CallOption) (*GenerateServiceKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GenerateServiceKeyResponse)
+	err := c.cc.Invoke(ctx, ServiceRegistry_GenerateServiceKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *serviceRegistryClient) RotateServiceKey(ctx context.Context, in *RotateServiceKeyRequest, opts ...grpc.CallOption) (*GenerateServiceKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GenerateServiceKeyResponse)
+	err := c.cc.Invoke(ctx, ServiceRegistry_RotateServiceKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ServiceRegistryServer is the server API for ServiceRegistry service.
 // All implementations must embed UnimplementedServiceRegistryServer
 // for forward compatibility.
@@ -126,6 +156,14 @@ type ServiceRegistryServer interface {
 	UpdateService(context.Context, *UpdateServiceRequest) (*Service, error)
 	// DeleteService removes a service from the registry.
 	DeleteService(context.Context, *DeleteServiceRequest) (*DeleteServiceResponse, error)
+	// GenerateServiceKey creates a fresh asymmetric key pair for the service,
+	// stores the public part (with a new kid) in the registry, and returns the
+	// private key PEM ONCE. The platform never persists the private key.
+	GenerateServiceKey(context.Context, *GenerateServiceKeyRequest) (*GenerateServiceKeyResponse, error)
+	// RotateServiceKey generates a new key pair and revokes an existing kid after
+	// an overlap window, supporting zero-downtime rotation. Returns the new
+	// private key PEM once.
+	RotateServiceKey(context.Context, *RotateServiceKeyRequest) (*GenerateServiceKeyResponse, error)
 	mustEmbedUnimplementedServiceRegistryServer()
 }
 
@@ -150,6 +188,12 @@ func (UnimplementedServiceRegistryServer) UpdateService(context.Context, *Update
 }
 func (UnimplementedServiceRegistryServer) DeleteService(context.Context, *DeleteServiceRequest) (*DeleteServiceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteService not implemented")
+}
+func (UnimplementedServiceRegistryServer) GenerateServiceKey(context.Context, *GenerateServiceKeyRequest) (*GenerateServiceKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GenerateServiceKey not implemented")
+}
+func (UnimplementedServiceRegistryServer) RotateServiceKey(context.Context, *RotateServiceKeyRequest) (*GenerateServiceKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RotateServiceKey not implemented")
 }
 func (UnimplementedServiceRegistryServer) mustEmbedUnimplementedServiceRegistryServer() {}
 func (UnimplementedServiceRegistryServer) testEmbeddedByValue()                         {}
@@ -262,6 +306,42 @@ func _ServiceRegistry_DeleteService_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ServiceRegistry_GenerateServiceKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GenerateServiceKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceRegistryServer).GenerateServiceKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ServiceRegistry_GenerateServiceKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceRegistryServer).GenerateServiceKey(ctx, req.(*GenerateServiceKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ServiceRegistry_RotateServiceKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RotateServiceKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ServiceRegistryServer).RotateServiceKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ServiceRegistry_RotateServiceKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ServiceRegistryServer).RotateServiceKey(ctx, req.(*RotateServiceKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ServiceRegistry_ServiceDesc is the grpc.ServiceDesc for ServiceRegistry service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -288,6 +368,14 @@ var ServiceRegistry_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteService",
 			Handler:    _ServiceRegistry_DeleteService_Handler,
+		},
+		{
+			MethodName: "GenerateServiceKey",
+			Handler:    _ServiceRegistry_GenerateServiceKey_Handler,
+		},
+		{
+			MethodName: "RotateServiceKey",
+			Handler:    _ServiceRegistry_RotateServiceKey_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

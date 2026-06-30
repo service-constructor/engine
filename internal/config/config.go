@@ -18,6 +18,13 @@ type Config struct {
 	HTTPAddr string
 	// ShutdownTimeout bounds graceful shutdown.
 	ShutdownTimeout time.Duration
+
+	// AuthMode selects the built-in authenticator: "jwt" (default) or "none"
+	// (dev only — accepts every request). Integrators replacing auth entirely
+	// supply their own Authenticator in code and can ignore this.
+	AuthMode string
+	// AuthJWTSecret is the HMAC secret for the built-in JWT authenticator.
+	AuthJWTSecret string
 }
 
 // Load reads configuration from the environment, applying defaults.
@@ -27,6 +34,11 @@ func Load() (Config, error) {
 		GRPCAddr:        env("GRPC_ADDR", ":9090"),
 		HTTPAddr:        env("HTTP_ADDR", ":8080"),
 		ShutdownTimeout: 10 * time.Second,
+		AuthMode:        env("AUTH_MODE", "jwt"),
+		AuthJWTSecret:   os.Getenv("AUTH_JWT_SECRET"),
+	}
+	if c.AuthMode == "jwt" && c.AuthJWTSecret == "" {
+		return Config{}, fmt.Errorf("AUTH_JWT_SECRET is required when AUTH_MODE=jwt (set AUTH_MODE=none for dev)")
 	}
 	if c.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("DATABASE_URL is required")
