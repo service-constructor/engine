@@ -71,19 +71,15 @@ func run(log *slog.Logger) error {
 	reg := service.NewRegistry(repo)
 	registrySrv := server.NewRegistryServer(reg)
 
-	// Payment saga: orchestrator over the order store, with mock Ledger and
-	// Executor for local runs (real integrations replace these ports).
+	// Payment saga: orchestrator over the order store. The Ledger is a mock for
+	// local runs; the Executor is selected by EXECUTOR_MODE.
 	orderRepo := postgres.NewOrderRepository(pool)
-	mockExec := saga.NewMockExecutor()
-	if s := os.Getenv("MOCK_EXECUTE_STATUS"); s != "" {
-		// Dev knob to exercise saga branches without a real provider.
-		mockExec.Result = saga.ExecuteResult{Status: saga.ExecuteStatus(s), ExternalRef: "mock-ref"}
-	}
+	executor := buildExecutor(cfg, log)
 	orch := saga.New(
 		registryLookup{reg},
 		orderRepo,
 		saga.NewMockLedger(),
-		mockExec,
+		executor,
 		saga.StaticDeviceKeyResolver{PEM: cfg.DeviceKeyPEM},
 	)
 	paymentSrv := server.NewPaymentServer(orch, orderRepo)
@@ -172,4 +168,21 @@ func buildAuthenticator(cfg config.Config, log *slog.Logger) (auth.Authenticator
 	default:
 		return nil, fmt.Errorf("unknown AUTH_MODE %q", cfg.AuthMode)
 	}
+}
+
+// buildExecutor selects the saga executor from config. EXECUTOR_MODE=http calls
+// each service's real executeUrl (with retries + circuit breaker); the default
+// "mock" returns a canned result for local runs. MOCK_EXECUTE_STATUS overrides
+// the mock verdict to exercise saga branches.
+func buildExecutor(cfg config.Config, log *slog.Logger) saga.Executor {
+	if cfg.ExecutorMode == "http" {
+		log.Info("using HTTP executor", "timeout", cfg.ExecuteTimeout)
+		return saga.NewHTTPExecutor(cfg.ExecuteTimeout, 5, 30*time.Second)
+	}
+	log.Info("using mock executor", "mode", cfg.ExecutorMode)
+	mockExec := saga.NewMockExecutor()
+	if s := os.Getenv("MOCK_EXECUTE_STATUS"); s != "" {
+		mockExec.Result = saga.ExecuteResult{Status: saga.ExecuteStatus(s), ExternalRef: "mock-ref"}
+	}
+	return mockExec
 }

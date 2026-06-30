@@ -30,6 +30,12 @@ type Config struct {
 	// StaticDeviceKeyResolver to verify consent signatures. In production a real
 	// DeviceKeyResolver replaces this.
 	DeviceKeyPEM string
+
+	// ExecutorMode selects the saga executor: "http" calls each service's real
+	// executeUrl; "mock" (default for dev) returns a canned result.
+	ExecutorMode string
+	// ExecuteTimeout bounds a single execute HTTP call.
+	ExecuteTimeout time.Duration
 }
 
 // Load reads configuration from the environment, applying defaults.
@@ -42,6 +48,8 @@ func Load() (Config, error) {
 		AuthMode:        env("AUTH_MODE", "jwt"),
 		AuthJWTSecret:   os.Getenv("AUTH_JWT_SECRET"),
 		DeviceKeyPEM:    os.Getenv("DEVICE_KEY_PEM"),
+		ExecutorMode:    env("EXECUTOR_MODE", "mock"),
+		ExecuteTimeout:  10 * time.Second,
 	}
 	if c.AuthMode == "jwt" && c.AuthJWTSecret == "" {
 		return Config{}, fmt.Errorf("AUTH_JWT_SECRET is required when AUTH_MODE=jwt (set AUTH_MODE=none for dev)")

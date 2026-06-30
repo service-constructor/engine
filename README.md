@@ -133,8 +133,14 @@ confirmed service is guaranteed to settle. On failure the held amount is
 **released** back. The handler is **idempotent on the quote nonce**.
 
 The `Ledger` (freeze/capture/release) and `Executor` (provider executeUrl) are
-**ports** — this module ships in-memory mocks; real deployments inject their own.
-A `DeviceKeyResolver` supplies device public keys (static for local runs).
+**ports**. The Ledger ships as an in-memory mock; the Executor has a real HTTP
+implementation (`EXECUTOR_MODE=http`) that POSTs to each service's `executeUrl`
+with a timeout, bounded idempotent retries (backoff), and a per-service circuit
+breaker — and a mock for local runs (`EXECUTOR_MODE=mock`, the default). A
+`DeviceKeyResolver` supplies device public keys (static for local runs).
+
+See [`example-service`](../example-service) for a runnable reference service the
+HTTP executor calls end-to-end.
 
 | Method & path                                  | Purpose                       |
 |------------------------------------------------|-------------------------------|
@@ -173,6 +179,7 @@ vendored under `third_party/` (no Buf Schema Registry auth required).
 - [x] Payment saga: `freeze → execute → capture` with compensation (order state machine)
 - [x] Async webhook callback (`/v1/services/callback`, signed) to finalize PENDING orders
 - [x] Reconciler with query-before-compensate (polls service `statusUrl`)
+- [x] Real HTTP Executor (timeout, idempotent retries with backoff, circuit breaker)
 - [ ] Outbox dispatcher (transactional outbox table ships; dispatcher pending)
-- [ ] Real Ledger / Executor adapters (mocks ship today)
+- [ ] Real Ledger adapter (mock ships today)
 - [ ] Server SDK for service integrators
