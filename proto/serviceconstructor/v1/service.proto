@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package serviceconstructor.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/field_mask.proto";
+
+option go_package = "github.com/nvsces/service-constructor/gen/serviceconstructor/v1;scv1";
+
+// ServiceRegistry manages the lifecycle of registered services.
+//
+// Each service is an autonomous web application that the wallet embeds via a
+// WebView and settles payments for through the orchestrator. This API covers
+// the CRUD half described in the white paper (Service Registry / Admin).
+service ServiceRegistry {
+  // CreateService registers a new service and returns it with a generated id.
+  rpc CreateService(CreateServiceRequest) returns (Service) {
+    option (google.api.http) = {
+      post: "/v1/admin/services"
+      body: "service"
+    };
+  }
+
+  // GetService fetches a single service by id.
+  rpc GetService(GetServiceRequest) returns (Service) {
+    option (google.api.http) = {
+      get: "/v1/admin/services/{service_id}"
+    };
+  }
+
+  // ListServices returns a page of services.
+  rpc ListServices(ListServicesRequest) returns (ListServicesResponse) {
+    option (google.api.http) = {
+      get: "/v1/admin/services"
+    };
+  }
+
+  // UpdateService applies a partial update described by an update mask.
+  rpc UpdateService(UpdateServiceRequest) returns (Service) {
+    option (google.api.http) = {
+      patch: "/v1/admin/services/{service.service_id}"
+      body: "service"
+    };
+  }
+
+  // DeleteService removes a service from the registry.
+  rpc DeleteService(DeleteServiceRequest) returns (DeleteServiceResponse) {
+    option (google.api.http) = {
+      delete: "/v1/admin/services/{service_id}"
+    };
+  }
+}
+
+// ServiceStatus is the lifecycle state of a registered service.
+enum ServiceStatus {
+  SERVICE_STATUS_UNSPECIFIED = 0;
+  // DRAFT: registered but not yet serving traffic.
+  SERVICE_STATUS_DRAFT = 1;
+  // ACTIVE: live and accepting payments.
+  SERVICE_STATUS_ACTIVE = 2;
+  // SUSPENDED: temporarily disabled (e.g. SLA breach, manual hold).
+  SERVICE_STATUS_SUSPENDED = 3;
+}
+
+// PublicKey is one of the service's asymmetric keys used to verify quote and
+// webhook signatures. The private counterpart never leaves the service.
+message PublicKey {
+  // kid identifies the key for rotation (overlap window of two valid keys).
+  string kid = 1;
+  // PEM-encoded public key material.
+  string pem = 2;
+}
+
+// ReceivingWallet is a payout wallet for a given currency. The set of
+// currencies here defines which currencies the service accepts.
+message ReceivingWallet {
+  int64 currency_id = 1;
+  string wallet_id = 2;
+}
+
+// Fee is the platform fee charged on top of a service payment.
+message Fee {
+  // percent is the percentage component, e.g. "1.5" for 1.5%.
+  string percent = 1;
+  // fixed is a flat component in the smallest currency unit semantics agreed
+  // with the ledger.
+  string fixed = 2;
+}
+
+// Limits constrains the amount and frequency of operations for a service.
+message Limits {
+  // max_amount per single operation (decimal string).
+  string max_amount = 1;
+  // per_hour caps the number of operations within a rolling hour.
+  int32 per_hour = 2;
+}
+
+// Service is a registry record describing how the platform trusts a service
+// and where it routes funds.
+message Service {
+  string service_id = 1;
+  // Human-readable name shown in the admin.
+  string name = 2;
+  // Public keys for verifying quote/webhook signatures (supports rotation).
+  repeated PublicKey public_keys = 3;
+  // Allowlist of web-app domains for the WebView and postMessage origin check.
+  repeated string origins = 4;
+  // Provider endpoint the orchestrator calls to execute the service.
+  string execute_url = 5;
+  // Provider endpoint polled during reconciliation (query-before-compensate).
+  string status_url = 6;
+  // Payout wallets per currency; also defines accepted currencies.
+  repeated ReceivingWallet receiving_wallets = 7;
+  // Platform fee for this service.
+  Fee fee = 8;
+  // Operation limits.
+  Limits limits = 9;
+  // Lifecycle status.
+  ServiceStatus status = 10;
+
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message CreateServiceRequest {
+  // The service to create. service_id, created_at and updated_at are ignored
+  // and assigned by the server.
+  Service service = 1;
+}
+
+message GetServiceRequest {
+  string service_id = 1;
+}
+
+message ListServicesRequest {
+  // Maximum number of services to return; the server may impose a cap.
+  int32 page_size = 1;
+  // Opaque token from a previous response to fetch the next page.
+  string page_token = 2;
+  // Optional status filter; UNSPECIFIED returns all.
+  ServiceStatus status = 3;
+}
+
+message ListServicesResponse {
+  repeated Service services = 1;
+  // Token to pass as page_token for the next page; empty when no more results.
+  string next_page_token = 2;
+}
+
+message UpdateServiceRequest {
+  // service.service_id selects the record; populated fields supply new values.
+  Service service = 1;
+  // Fields to update; if empty, all mutable fields in service are applied.
+  google.protobuf.FieldMask update_mask = 2;
+}
+
+message DeleteServiceRequest {
+  string service_id = 1;
+}
+
+message DeleteServiceResponse {}
