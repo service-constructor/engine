@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+package serviceconstructor.v1;
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/nvsces/service-constructor/gen/serviceconstructor/v1;scv1";
+
+// PaymentService is the universal payment entry point: it runs the saga over a
+// signed quote and a device-signed consent (white paper section 7).
+service PaymentService {
+  // Pay verifies the quote and consent, then runs freeze -> execute ->
+  // capture/release. Idempotent on the quote nonce.
+  rpc Pay(PayRequest) returns (Order) {
+    option (google.api.http) = {
+      post: "/v1/services/pay"
+      body: "*"
+    };
+  }
+
+  // GetOrder returns the current state of an order.
+  rpc GetOrder(GetOrderRequest) returns (Order) {
+    option (google.api.http) = {
+      get: "/v1/services/{service_id}/orders/{order_id}"
+    };
+  }
+}
+
+// Quote is the signed payment instruction issued by a service. The platform
+// verifies its signature against the service public key in the registry.
+message Quote {
+  int32 version = 1;
+  string service_id = 2;
+  string user_id = 3;
+  string amount = 4;
+  int64 currency_id = 5;
+  repeated int64 accepted_currency_ids = 6;
+  string description = 7;
+  // metadata is opaque to the platform; echoed to the provider on execute.
+  map<string, string> metadata = 8;
+  string nonce = 9;
+  int64 exp = 10;
+  string kid = 11;
+  // Base64 signature over the canonical quote (all fields except sig).
+  string sig = 12;
+}
+
+// Consent is the device-signed approval produced after the user confirms.
+message Consent {
+  string quote_hash = 1;
+  string wallet_id = 2;
+  string nonce = 3;
+  int64 ts = 4;
+  string device_kid = 5;
+  string sig = 6;
+}
+
+message PayRequest {
+  Quote quote = 1;
+  // Wallet the user selected on the consent screen.
+  string selected_wallet_id = 2;
+  // Currency of the selected wallet (must match the quote currency and be
+  // accepted by the service).
+  int64 selected_wallet_currency_id = 3;
+  Consent consent = 4;
+}
+
+// OrderState mirrors the saga state machine.
+enum OrderState {
+  ORDER_STATE_UNSPECIFIED = 0;
+  ORDER_STATE_CREATED = 1;
+  ORDER_STATE_FROZEN = 2;
+  ORDER_STATE_EXECUTING = 3;
+  ORDER_STATE_PENDING = 4;
+  ORDER_STATE_EXECUTED = 5;
+  ORDER_STATE_COMPLETED = 6;
+  ORDER_STATE_REJECTED = 7;
+  ORDER_STATE_FAILED = 8;
+  ORDER_STATE_RELEASED = 9;
+}
+
+message Order {
+  string order_id = 1;
+  string service_id = 2;
+  string user_id = 3;
+  string wallet_id = 4;
+  string amount = 5;
+  int64 currency_id = 6;
+  string fee = 7;
+  string net = 8;
+  string external_ref = 9;
+  OrderState state = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message GetOrderRequest {
+  string service_id = 1;
+  string order_id = 2;
+}

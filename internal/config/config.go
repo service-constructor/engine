@@ -25,6 +25,11 @@ type Config struct {
 	AuthMode string
 	// AuthJWTSecret is the HMAC secret for the built-in JWT authenticator.
 	AuthJWTSecret string
+
+	// DeviceKeyPEM is a static device public key (PEM) used by the local
+	// StaticDeviceKeyResolver to verify consent signatures. In production a real
+	// DeviceKeyResolver replaces this.
+	DeviceKeyPEM string
 }
 
 // Load reads configuration from the environment, applying defaults.
@@ -36,6 +41,7 @@ func Load() (Config, error) {
 		ShutdownTimeout: 10 * time.Second,
 		AuthMode:        env("AUTH_MODE", "jwt"),
 		AuthJWTSecret:   os.Getenv("AUTH_JWT_SECRET"),
+		DeviceKeyPEM:    os.Getenv("DEVICE_KEY_PEM"),
 	}
 	if c.AuthMode == "jwt" && c.AuthJWTSecret == "" {
 		return Config{}, fmt.Errorf("AUTH_JWT_SECRET is required when AUTH_MODE=jwt (set AUTH_MODE=none for dev)")

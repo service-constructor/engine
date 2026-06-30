@@ -20,10 +20,22 @@ import (
 	scv1 "github.com/nvsces/service-constructor/gen/serviceconstructor/v1"
 	"github.com/nvsces/service-constructor/internal/auth"
 	"github.com/nvsces/service-constructor/internal/config"
+	"github.com/nvsces/service-constructor/internal/domain"
 	"github.com/nvsces/service-constructor/internal/repository/postgres"
+	"github.com/nvsces/service-constructor/internal/saga"
 	"github.com/nvsces/service-constructor/internal/server"
 	"github.com/nvsces/service-constructor/internal/service"
 )
+
+// registryLookup adapts the service Registry to saga.ServiceLookup. Payment is
+// system-initiated, so the lookup is unscoped (ScopeAll).
+type registryLookup struct {
+	reg *service.Registry
+}
+
+func (l registryLookup) Lookup(ctx context.Context, serviceID string) (*domain.Service, error) {
+	return l.reg.Get(ctx, service.ScopeAll, serviceID)
+}
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -58,16 +70,34 @@ func run(log *slog.Logger) error {
 	reg := service.NewRegistry(repo)
 	registrySrv := server.NewRegistryServer(reg)
 
+	// Payment saga: orchestrator over the order store, with mock Ledger and
+	// Executor for local runs (real integrations replace these ports).
+	orderRepo := postgres.NewOrderRepository(pool)
+	mockExec := saga.NewMockExecutor()
+	if s := os.Getenv("MOCK_EXECUTE_STATUS"); s != "" {
+		// Dev knob to exercise saga branches without a real provider.
+		mockExec.Result = saga.ExecuteResult{Status: saga.ExecuteStatus(s), ExternalRef: "mock-ref"}
+	}
+	orch := saga.New(
+		registryLookup{reg},
+		orderRepo,
+		saga.NewMockLedger(),
+		mockExec,
+		saga.StaticDeviceKeyResolver{PEM: cfg.DeviceKeyPEM},
+	)
+	paymentSrv := server.NewPaymentServer(orch, orderRepo)
+
 	// Authentication is pluggable: an integrator can replace buildAuthenticator
 	// with their own Authenticator without touching the registry or transport.
 	authn, err := buildAuthenticator(cfg, log)
 	if err != nil {
 		return err
 	}
-	interceptor := auth.UnaryServerInterceptor(authn, auth.AdminMethods, auth.RoleAdmin)
+	interceptor := auth.UnaryServerInterceptor(authn, auth.DefaultRoleResolver)
 
 	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(interceptor))
 	scv1.RegisterServiceRegistryServer(grpcServer, registrySrv)
+	scv1.RegisterPaymentServiceServer(grpcServer, paymentSrv)
 
 	// gRPC listener.
 	lis, err := net.Listen("tcp", cfg.GRPCAddr)
@@ -79,6 +109,9 @@ func run(log *slog.Logger) error {
 	gwMux := runtime.NewServeMux()
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
 	if err := scv1.RegisterServiceRegistryHandlerFromEndpoint(ctx, gwMux, cfg.GRPCAddr, dialOpts); err != nil {
+		return err
+	}
+	if err := scv1.RegisterPaymentServiceHandlerFromEndpoint(ctx, gwMux, cfg.GRPCAddr, dialOpts); err != nil {
 		return err
 	}
 	httpServer := &http.Server{Addr: cfg.HTTPAddr, Handler: gwMux}

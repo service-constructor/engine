@@ -11,21 +11,34 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// MethodPredicate reports whether a gRPC full method name (e.g.
-// "/serviceconstructor.v1.ServiceRegistry/CreateService") requires
-// authentication. Returning false lets the call through unauthenticated.
-type MethodPredicate func(fullMethod string) bool
+// Requirement is the auth requirement for a method, returned by a RoleResolver.
+type Requirement int
 
-// UnaryServerInterceptor authenticates incoming unary calls for which protected
-// reports true, attaching the Principal to the context. It also enforces that
-// the caller holds requiredRole.
+const (
+	// Public: no authentication required.
+	Public Requirement = iota
+	// AuthOnly: a valid principal is required, but no specific role.
+	AuthOnly
+	// RequireAdmin: a valid principal holding the admin role.
+	RequireAdmin
+)
+
+// RoleResolver maps a gRPC full method name (e.g.
+// "/serviceconstructor.v1.ServiceRegistry/CreateService") to its auth
+// requirement.
+type RoleResolver func(fullMethod string) Requirement
+
+// UnaryServerInterceptor authenticates and authorizes incoming unary calls
+// according to resolve. Public methods pass through; AuthOnly requires a valid
+// principal; RequireAdmin additionally requires the admin role.
 //
 // The bearer token is taken from the "authorization" metadata entry; the HTTP
 // gateway forwards the inbound Authorization header into this metadata, so a
 // single interceptor covers both gRPC and REST callers.
-func UnaryServerInterceptor(a Authenticator, protected MethodPredicate, requiredRole string) grpc.UnaryServerInterceptor {
+func UnaryServerInterceptor(a Authenticator, resolve RoleResolver) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if !protected(info.FullMethod) {
+		reqd := resolve(info.FullMethod)
+		if reqd == Public {
 			return handler(ctx, req)
 		}
 
@@ -36,8 +49,8 @@ func UnaryServerInterceptor(a Authenticator, protected MethodPredicate, required
 		}
 		ctx = WithPrincipal(ctx, principal)
 
-		if requiredRole != "" {
-			if err := RequireRole(ctx, requiredRole); err != nil {
+		if reqd == RequireAdmin {
+			if err := RequireRole(ctx, RoleAdmin); err != nil {
 				return nil, toGRPC(err)
 			}
 		}
@@ -45,12 +58,18 @@ func UnaryServerInterceptor(a Authenticator, protected MethodPredicate, required
 	}
 }
 
-// AdminMethods is a MethodPredicate matching the admin surface of the registry:
-// any method whose path contains "/admin" or mutates the registry. Here we
-// simply protect everything on the ServiceRegistry service, since the current
-// API is admin-only.
-func AdminMethods(fullMethod string) bool {
-	return strings.Contains(fullMethod, "ServiceRegistry")
+// DefaultRoleResolver enforces the platform policy: registry/admin methods need
+// the admin role; payment methods need an authenticated user; anything else is
+// public.
+func DefaultRoleResolver(fullMethod string) Requirement {
+	switch {
+	case strings.Contains(fullMethod, "ServiceRegistry"):
+		return RequireAdmin
+	case strings.Contains(fullMethod, "PaymentService"):
+		return AuthOnly
+	default:
+		return Public
+	}
 }
 
 func bearerFromMetadata(ctx context.Context) string {

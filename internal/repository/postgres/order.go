@@ -1,0 +1,137 @@
+package postgres
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/nvsces/service-constructor/internal/domain"
+)
+
+// OrderRepository persists saga orders. It implements saga.OrderStore.
+type OrderRepository struct {
+	pool *pgxpool.Pool
+}
+
+// NewOrderRepository wraps a pgx pool.
+func NewOrderRepository(pool *pgxpool.Pool) *OrderRepository {
+	return &OrderRepository{pool: pool}
+}
+
+const orderColumns = `order_id, service_id, user_id, wallet_id, amount, currency_id,
+	quote_nonce, fee, net, external_ref, metadata, state, freeze_expires_at,
+	created_at, updated_at`
+
+func (r *OrderRepository) Create(ctx context.Context, o *domain.Order) error {
+	meta := marshalMeta(o.Metadata)
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO orders (`+orderColumns+`)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+		o.ID, o.ServiceID, o.UserID, o.WalletID, o.Amount, o.CurrencyID,
+		o.QuoteNonce, o.Fee, o.Net, o.ExternalRef, meta, string(o.State),
+		nullableTime(o.FreezeExpiresAt), o.CreatedAt, o.UpdatedAt,
+	)
+	if isUniqueViolation(err) {
+		// Either the id or the (service_id, quote_nonce) unique index fired.
+		return domain.ErrIdempotencyConflict
+	}
+	if err != nil {
+		return fmt.Errorf("insert order: %w", err)
+	}
+	return nil
+}
+
+func (r *OrderRepository) Get(ctx context.Context, id string) (*domain.Order, error) {
+	row := r.pool.QueryRow(ctx, `SELECT `+orderColumns+` FROM orders WHERE order_id = $1`, id)
+	o, err := scanOrder(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrOrderNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get order: %w", err)
+	}
+	return o, nil
+}
+
+func (r *OrderRepository) FindByNonce(ctx context.Context, serviceID, nonce string) (*domain.Order, error) {
+	row := r.pool.QueryRow(ctx,
+		`SELECT `+orderColumns+` FROM orders WHERE service_id = $1 AND quote_nonce = $2`,
+		serviceID, nonce)
+	o, err := scanOrder(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrOrderNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find order by nonce: %w", err)
+	}
+	return o, nil
+}
+
+func (r *OrderRepository) Save(ctx context.Context, o *domain.Order) error {
+	meta := marshalMeta(o.Metadata)
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE orders SET
+			wallet_id = $2, amount = $3, currency_id = $4, fee = $5, net = $6,
+			external_ref = $7, metadata = $8, state = $9, freeze_expires_at = $10,
+			updated_at = $11
+		WHERE order_id = $1`,
+		o.ID, o.WalletID, o.Amount, o.CurrencyID, o.Fee, o.Net,
+		o.ExternalRef, meta, string(o.State), nullableTime(o.FreezeExpiresAt), o.UpdatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("update order: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrOrderNotFound
+	}
+	return nil
+}
+
+func scanOrder(row interface{ Scan(...any) error }) (*domain.Order, error) {
+	var (
+		o         domain.Order
+		meta      []byte
+		state     string
+		freezeExp *time.Time
+	)
+	if err := row.Scan(
+		&o.ID, &o.ServiceID, &o.UserID, &o.WalletID, &o.Amount, &o.CurrencyID,
+		&o.QuoteNonce, &o.Fee, &o.Net, &o.ExternalRef, &meta, &state,
+		&freezeExp, &o.CreatedAt, &o.UpdatedAt,
+	); err != nil {
+		return nil, err
+	}
+	o.State = domain.OrderState(state)
+	if freezeExp != nil {
+		o.FreezeExpiresAt = *freezeExp
+	}
+	if len(meta) > 0 {
+		if err := json.Unmarshal(meta, &o.Metadata); err != nil {
+			return nil, fmt.Errorf("decode metadata: %w", err)
+		}
+	}
+	return &o, nil
+}
+
+func marshalMeta(m map[string]any) []byte {
+	if m == nil {
+		return []byte("{}")
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		return []byte("{}")
+	}
+	return b
+}
+
+func nullableTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}

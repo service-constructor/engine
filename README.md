@@ -8,9 +8,10 @@ A registered **service** is an autonomous web app the wallet embeds via a
 WebView; settlement runs through an orchestrator that freezes funds, executes
 the service, and captures payment under a transactional saga.
 
-This repository currently implements the **Service Registry** — CRUD over
-services — exposed as a gRPC API with an HTTP/JSON gateway in front of it. The
-payment saga is the next milestone.
+This repository implements the **Service Registry** (CRUD over services) and the
+**payment saga** (`POST /v1/services/pay`): a signed-quote + device-signed
+consent flow that runs `freeze → execute → capture/release` under an explicit
+order state machine. Both are exposed as gRPC with an HTTP/JSON gateway.
 
 ## Architecture
 
@@ -25,10 +26,12 @@ Layers (clean separation, transport- and storage-agnostic core):
 |-----------------------------------|---------------------------------------------------|
 | `proto/`                          | gRPC + HTTP contract (source of truth)            |
 | `gen/`                            | Generated stubs (`buf generate`)                  |
-| `internal/domain`                 | Core entities and invariants, no deps             |
-| `internal/service`               | Use cases (`Registry`), `Repository` port         |
-| `internal/repository/postgres`    | Postgres adapter (pgx), migrations runner         |
-| `internal/server`                 | gRPC adapter, proto↔domain mapping                |
+| `internal/domain`                 | Core entities and invariants (service, order, state machine) |
+| `internal/service`               | Registry use case, `Repository` port              |
+| `internal/saga`                   | Payment orchestrator, quote/consent verification, `Ledger`/`Executor` ports (+ mocks) |
+| `internal/auth`                   | Pluggable `Authenticator`, gRPC interceptor       |
+| `internal/repository/postgres`    | Postgres adapters (services, orders), migrations runner |
+| `internal/server`                 | gRPC adapters, proto↔domain mapping               |
 | `cmd/server`                      | Wiring: migrations, gRPC, gateway, shutdown       |
 
 ## Quick start
@@ -109,6 +112,35 @@ curl -X POST localhost:8080/v1/admin/services -H 'Content-Type: application/json
 }'
 ```
 
+## Payment saga
+
+`POST /v1/services/pay` runs the saga over a **signed quote** + **device-signed
+consent** (white paper section 7). The platform never lets a service debit funds
+on its own: the service signs the quote with its private key (verified against
+the registry public key by `kid`), and the user approves it on a trusted screen,
+producing a device signature over `hash(quote) + wallet + nonce`.
+
+Order state machine (white paper section 8):
+
+```
+CREATED → FROZEN → EXECUTING → EXECUTED → COMPLETED      (happy path)
+                       ↓ PENDING (async, awaits webhook)
+                       ↓ FAILED → RELEASED                (compensation)
+```
+
+Invariant: funds are moved to **held** (Ledger.freeze) *before* execute, so a
+confirmed service is guaranteed to settle. On failure the held amount is
+**released** back. The handler is **idempotent on the quote nonce**.
+
+The `Ledger` (freeze/capture/release) and `Executor` (provider executeUrl) are
+**ports** — this module ships in-memory mocks; real deployments inject their own.
+A `DeviceKeyResolver` supplies device public keys (static for local runs).
+
+| Method & path                                  | Purpose                       |
+|------------------------------------------------|-------------------------------|
+| `POST /v1/services/pay`                        | Run the saga (auth: user)     |
+| `GET  /v1/services/{serviceId}/orders/{orderId}` | Order state                 |
+
 ## Development
 
 ```bash
@@ -127,7 +159,9 @@ vendored under `third_party/` (no Buf Schema Registry auth required).
 - [x] Pluggable admin auth (backend `Authenticator` + frontend `TokenProvider`)
 - [x] Service key generation/rotation (Ed25519 / EC P-256)
 - [x] Admin UI (React + Vite + TS)
-- [ ] Signed quote + device-signed consent verification
-- [ ] Payment saga: `freeze → execute → capture` with compensation
-- [ ] Reconciler (query-before-compensate) and outbox dispatcher
+- [x] Signed quote + device-signed consent verification
+- [x] Payment saga: `freeze → execute → capture` with compensation (order state machine)
+- [ ] Async webhook callback (`/v1/services/callback`) to finalize PENDING orders
+- [ ] Outbox dispatcher + reconciler (query-before-compensate)
+- [ ] Real Ledger / Executor adapters (mocks ship today)
 - [ ] Server SDK for service integrators
