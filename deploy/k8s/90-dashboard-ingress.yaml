@@ -1,0 +1,36 @@
+# Public HTTPS access to the Kubernetes Dashboard at
+# https://dashboard.serviceconstructor.dev. Login is by token (the dashboard's
+# own auth) — the Ingress only terminates TLS and routes to the dashboard.
+#
+# The dashboard serves HTTPS with a self-signed cert on :443, so ingress-nginx
+# must speak HTTPS to the backend (backend-protocol: HTTPS).
+#
+# NOTE: this exposes a cluster-admin-capable dashboard on the public internet.
+# Access still requires a valid bearer token, but consider adding IP allow-list
+# or basic-auth in front for anything beyond a short-lived demo.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubernetes-dashboard
+  namespace: kubernetes-dashboard
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/upstream-vhost: dashboard.serviceconstructor.dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: dashboard.serviceconstructor.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kubernetes-dashboard
+                port:
+                  number: 443
+  tls:
+    - hosts:
+        - dashboard.serviceconstructor.dev
+      secretName: dashboard-serviceconstructor-dev-tls

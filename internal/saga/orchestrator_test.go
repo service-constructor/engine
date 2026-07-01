@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nvsces/service-constructor/internal/domain"
+	"github.com/service-constructor/engine/internal/domain"
 )
 
 // staticLookup returns a fixed service.

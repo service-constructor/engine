@@ -1,0 +1,176 @@
+# image example: service backend + mini-app SPA.
+#   image-service.serviceconstructor.dev   -> express backend (quote/gallery)
+#   image-miniapp.serviceconstructor.dev   -> SPA (proxies /service -> backend)
+#
+# SERVICE_ID is the id assigned when "Image Generator" was registered in the
+# developer console. The encryption keypair is generated on startup (ephemeral;
+# re-register the service's encryption key if the pod restarts).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-service
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: image-service
+  template:
+    metadata:
+      labels:
+        app: image-service
+    spec:
+      containers:
+        - name: image-service
+          image: serviceconstructor-image-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4000
+              name: http
+          env:
+            - name: PORT
+              value: "4000"
+            - name: SERVICE_ID
+              value: "svc_1e2284bcdf3f428996305e1ab51d9363"
+            - name: PLATFORM_BASE_URL
+              value: "http://engine:8080"
+            # kid must match the kid the signing public key is registered under
+            # in the developer console.
+            - name: SERVICE_KID
+              value: "svc-key-mr2kk72w"
+            # Signing (Ed25519) + encryption (X25519) keys whose PUBLIC halves are
+            # registered for this service in the developer console. Secret created
+            # imperatively:
+            #   kubectl create secret generic image-service-keys \
+            #     --from-file=PRIVATE_KEY_PEM=image_sign.pem \
+            #     --from-literal=ENC_PRIVATE_KEY_B64=...
+            - name: PRIVATE_KEY_PEM
+              valueFrom:
+                secretKeyRef:
+                  name: image-service-keys
+                  key: PRIVATE_KEY_PEM
+            - name: ENC_PRIVATE_KEY_B64
+              valueFrom:
+                secretKeyRef:
+                  name: image-service-keys
+                  key: ENC_PRIVATE_KEY_B64
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 4000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 4000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: image-service
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: image-service
+  ports:
+    - name: http
+      port: 4000
+      targetPort: 4000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: image-miniapp
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: image-miniapp
+  template:
+    metadata:
+      labels:
+        app: image-miniapp
+    spec:
+      containers:
+        - name: image-miniapp
+          image: serviceconstructor-image-miniapp:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: image-miniapp
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: image-miniapp
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: image-service
+  namespace: serviceconstructor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/upstream-vhost: image-service.serviceconstructor.dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: image-service.serviceconstructor.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: image-service
+                port:
+                  number: 4000
+  tls:
+    - hosts:
+        - image-service.serviceconstructor.dev
+      secretName: image-service-serviceconstructor-dev-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: image-miniapp
+  namespace: serviceconstructor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/upstream-vhost: image-miniapp.serviceconstructor.dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: image-miniapp.serviceconstructor.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: image-miniapp
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - image-miniapp.serviceconstructor.dev
+      secretName: image-miniapp-serviceconstructor-dev-tls

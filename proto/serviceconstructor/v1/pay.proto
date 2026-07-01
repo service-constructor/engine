@@ -5,7 +5,7 @@ package serviceconstructor.v1;
 import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/nvsces/service-constructor/gen/serviceconstructor/v1;scv1";
+option go_package = "github.com/service-constructor/engine/gen/serviceconstructor/v1;scv1";
 
 // PaymentService is the universal payment entry point: it runs the saga over a
 // signed quote and a device-signed consent (white paper section 7).

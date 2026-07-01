@@ -10,7 +10,7 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/nvsces/service-constructor/migrations"
+	"github.com/service-constructor/engine/migrations"
 )
 
 // Connect opens a pgx pool and verifies connectivity.

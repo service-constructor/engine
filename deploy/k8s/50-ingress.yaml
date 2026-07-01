@@ -1,0 +1,30 @@
+# Exposes the engine REST gateway at https://api.serviceconstructor.dev.
+# Mirrors the existing tutoro.ru ingress pattern: nginx class + cert-manager
+# letsencrypt-prod issuer (HTTP-01). Requires the api.serviceconstructor.dev
+# A-record to be "DNS only" (grey cloud) in Cloudflare so the ACME HTTP-01
+# challenge reaches this node directly.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: engine-api
+  namespace: serviceconstructor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/upstream-vhost: api.serviceconstructor.dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.serviceconstructor.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: engine
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - api.serviceconstructor.dev
+      secretName: api-serviceconstructor-dev-tls

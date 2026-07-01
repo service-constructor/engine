@@ -1,4 +1,4 @@
-module github.com/nvsces/service-constructor
+module github.com/service-constructor/engine
 
 go 1.25.0
 

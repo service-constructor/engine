@@ -7,6 +7,9 @@
 .env
 .env.local
 
+# Real k8s secret (use deploy/k8s/10-secret.example.yaml as template)
+deploy/k8s/10-secret.yaml
+
 # OS
 .DS_Store
 

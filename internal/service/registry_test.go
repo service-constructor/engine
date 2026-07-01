@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nvsces/service-constructor/internal/domain"
-	"github.com/nvsces/service-constructor/internal/service"
+	"github.com/service-constructor/engine/internal/domain"
+	"github.com/service-constructor/engine/internal/service"
 )
 
 // memRepo is an in-memory Repository for exercising the use-case layer without

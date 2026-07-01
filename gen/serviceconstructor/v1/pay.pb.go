@@ -969,7 +969,7 @@ const file_serviceconstructor_v1_pay_proto_rawDesc = "" +
 	"\bGetOrder\x12&.serviceconstructor.v1.GetOrderRequest\x1a\x1c.serviceconstructor.v1.Order\"3\x82\xd3\xe4\x93\x02-\x12+/v1/services/{service_id}/orders/{order_id}\x12\x8a\x01\n" +
 	"\x0eGetServiceInfo\x12,.serviceconstructor.v1.GetServiceInfoRequest\x1a\".serviceconstructor.v1.ServiceInfo\"&\x82\xd3\xe4\x93\x02 \x12\x1e/v1/services/{service_id}/info\x12\x86\x01\n" +
 	"\x0fListServiceInfo\x12-.serviceconstructor.v1.ListServiceInfoRequest\x1a..serviceconstructor.v1.ListServiceInfoResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/services\x12r\n" +
-	"\bCallback\x12&.serviceconstructor.v1.CallbackRequest\x1a\x1c.serviceconstructor.v1.Order\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/services/callbackBFZDgithub.com/nvsces/service-constructor/gen/serviceconstructor/v1;scv1b\x06proto3"
+	"\bCallback\x12&.serviceconstructor.v1.CallbackRequest\x1a\x1c.serviceconstructor.v1.Order\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/services/callbackBFZDgithub.com/service-constructor/engine/gen/serviceconstructor/v1;scv1b\x06proto3"
 
 var (
 	file_serviceconstructor_v1_pay_proto_rawDescOnce sync.Once

@@ -13,7 +13,7 @@ import (
 
 	ledgerv1 "github.com/nvsces/ledger/gen/ledger/v1"
 
-	"github.com/nvsces/service-constructor/internal/saga"
+	"github.com/service-constructor/engine/internal/saga"
 )
 
 // Client is a saga.Ledger backed by the ledger gRPC service.

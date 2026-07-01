@@ -9,7 +9,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/nvsces/service-constructor/internal/domain"
+	"github.com/service-constructor/engine/internal/domain"
 )
 
 // Ledger is the settlement primitive (white paper §10). The platform owns

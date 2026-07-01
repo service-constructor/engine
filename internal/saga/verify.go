@@ -11,7 +11,7 @@ import (
 	"encoding/pem"
 	"fmt"
 
-	"github.com/nvsces/service-constructor/internal/domain"
+	"github.com/service-constructor/engine/internal/domain"
 )
 
 // canonicalQuoteBytes returns the deterministic JSON over which the quote is

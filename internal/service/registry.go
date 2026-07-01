@@ -11,8 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/nvsces/service-constructor/internal/domain"
-	"github.com/nvsces/service-constructor/internal/keygen"
+	"github.com/service-constructor/engine/internal/domain"
+	"github.com/service-constructor/engine/internal/keygen"
 )
 
 // Repository is the persistence port for services. Read/write methods take a

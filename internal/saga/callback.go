@@ -3,7 +3,7 @@ package saga
 import (
 	"encoding/json"
 
-	"github.com/nvsces/service-constructor/internal/domain"
+	"github.com/service-constructor/engine/internal/domain"
 )
 
 // Callback is the provider's async finalization message (white paper section 9).

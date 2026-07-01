@@ -8,10 +8,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	scv1 "github.com/nvsces/service-constructor/gen/serviceconstructor/v1"
-	"github.com/nvsces/service-constructor/internal/auth"
-	"github.com/nvsces/service-constructor/internal/domain"
-	"github.com/nvsces/service-constructor/internal/saga"
+	scv1 "github.com/service-constructor/engine/gen/serviceconstructor/v1"
+	"github.com/service-constructor/engine/internal/auth"
+	"github.com/service-constructor/engine/internal/domain"
+	"github.com/service-constructor/engine/internal/saga"
 )
 
 // ServiceLookup resolves services, unscoped. GetServiceInfo uses Lookup to

@@ -14,8 +14,8 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/nvsces/service-constructor/internal/domain"
-	"github.com/nvsces/service-constructor/internal/service"
+	"github.com/service-constructor/engine/internal/domain"
+	"github.com/service-constructor/engine/internal/service"
 )
 
 // ServiceRepository persists domain.Service records.

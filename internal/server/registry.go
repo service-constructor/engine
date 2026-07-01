@@ -11,10 +11,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	scv1 "github.com/nvsces/service-constructor/gen/serviceconstructor/v1"
-	"github.com/nvsces/service-constructor/internal/auth"
-	"github.com/nvsces/service-constructor/internal/domain"
-	"github.com/nvsces/service-constructor/internal/service"
+	scv1 "github.com/service-constructor/engine/gen/serviceconstructor/v1"
+	"github.com/service-constructor/engine/internal/auth"
+	"github.com/service-constructor/engine/internal/domain"
+	"github.com/service-constructor/engine/internal/service"
 )
 
 // scopeFromContext derives the data-access scope from the authenticated

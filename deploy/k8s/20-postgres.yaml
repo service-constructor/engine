@@ -1,0 +1,122 @@
+# Single Postgres instance hosting two databases:
+#   service_constructor  -> engine
+#   ledger               -> ledger
+# The default POSTGRES_DB creates service_constructor; an initdb hook creates
+# the ledger database. Both services apply their own migrations at startup.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  namespace: serviceconstructor
+data:
+  # Runs only on first init (empty data dir). service_constructor already
+  # exists via POSTGRES_DB; we add ledger.
+  01-create-ledger-db.sql: |
+    CREATE DATABASE ledger;
+  02-create-auth-db.sql: |
+    CREATE DATABASE auth;
+---
+# Static hostPath PV — the cluster has no dynamic provisioner / StorageClass,
+# so we bind a manual volume the same way the other services (skazka, teacher-
+# mate) do. Data lives on the node at /data/serviceconstructor/pgdata.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: serviceconstructor-pgdata
+spec:
+  accessModes: ["ReadWriteOnce"]
+  capacity:
+    storage: 2Gi
+  claimRef:
+    name: postgres-data
+    namespace: serviceconstructor
+  hostPath:
+    path: /data/serviceconstructor/pgdata
+    type: DirectoryOrCreate
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: serviceconstructor
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: ""
+  volumeName: serviceconstructor-pgdata
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: "sc"
+            - name: POSTGRES_DB
+              value: "service_constructor"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: serviceconstructor-secrets
+                  key: POSTGRES_PASSWORD
+            # Keep initdb data in a subdir so the PVC lost+found doesn't block init.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "sc", "-d", "service_constructor"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "sc"]
+            initialDelaySeconds: 15
+            periodSeconds: 15
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+        - name: initdb
+          configMap:
+            name: postgres-initdb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

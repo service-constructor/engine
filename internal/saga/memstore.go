@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nvsces/service-constructor/internal/domain"
+	"github.com/service-constructor/engine/internal/domain"
 )
 
 // MemOrderStore is an in-memory OrderStore (and OutboxStore) for local runs and

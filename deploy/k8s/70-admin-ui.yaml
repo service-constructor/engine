@@ -1,0 +1,76 @@
+# admin-ui (developer console): nginx serving the SPA + proxying /v1 to auth
+# and engine. Exposed at https://developer.serviceconstructor.dev.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-ui
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-ui
+  template:
+    metadata:
+      labels:
+        app: admin-ui
+    spec:
+      containers:
+        - name: admin-ui
+          image: serviceconstructor-admin:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-ui
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: admin-ui
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: admin-ui
+  namespace: serviceconstructor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/upstream-vhost: developer.serviceconstructor.dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: developer.serviceconstructor.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-ui
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - developer.serviceconstructor.dev
+      secretName: developer-serviceconstructor-dev-tls

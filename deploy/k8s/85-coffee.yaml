@@ -1,0 +1,174 @@
+# coffee example: Go service backend + mini-app SPA.
+#   coffee-service.serviceconstructor.dev  -> Go backend (quote/execute/menu)
+#   coffee-miniapp.serviceconstructor.dev  -> SPA (proxies /service -> backend)
+#
+# SERVICE_ID is the id assigned when "Coffee" was registered in the developer
+# console. Signing + encryption keypairs are generated on startup (ephemeral).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coffee-service
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coffee-service
+  template:
+    metadata:
+      labels:
+        app: coffee-service
+    spec:
+      containers:
+        - name: coffee-service
+          image: serviceconstructor-coffee-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4100
+              name: http
+          env:
+            - name: PORT
+              value: "4100"
+            - name: SERVICE_ID
+              value: "svc_09415db346e346daa061310f71c8613b"
+            - name: PLATFORM_BASE_URL
+              value: "http://engine:8080"
+            # kid must match the kid the signing public key is registered under.
+            - name: SERVICE_KID
+              value: "svc-key-mr2kl7v8"
+            # Signing (Ed25519) + encryption (X25519) keys registered for this
+            # service in the developer console. Provided inline so the read-only
+            # distroless container never writes to disk. Secret created with:
+            #   kubectl create secret generic coffee-service-keys \
+            #     --from-file=PRIVATE_KEY_PEM=coffee_sign.pem \
+            #     --from-literal=ENC_PRIVATE_KEY_B64=...
+            - name: PRIVATE_KEY_PEM
+              valueFrom:
+                secretKeyRef:
+                  name: coffee-service-keys
+                  key: PRIVATE_KEY_PEM
+            - name: ENC_PRIVATE_KEY_B64
+              valueFrom:
+                secretKeyRef:
+                  name: coffee-service-keys
+                  key: ENC_PRIVATE_KEY_B64
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 4100
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 4100
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coffee-service
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: coffee-service
+  ports:
+    - name: http
+      port: 4100
+      targetPort: 4100
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coffee-miniapp
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: coffee-miniapp
+  template:
+    metadata:
+      labels:
+        app: coffee-miniapp
+    spec:
+      containers:
+        - name: coffee-miniapp
+          image: serviceconstructor-coffee-miniapp:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coffee-miniapp
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: coffee-miniapp
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: coffee-service
+  namespace: serviceconstructor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/upstream-vhost: coffee-service.serviceconstructor.dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: coffee-service.serviceconstructor.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: coffee-service
+                port:
+                  number: 4100
+  tls:
+    - hosts:
+        - coffee-service.serviceconstructor.dev
+      secretName: coffee-service-serviceconstructor-dev-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: coffee-miniapp
+  namespace: serviceconstructor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/upstream-vhost: coffee-miniapp.serviceconstructor.dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: coffee-miniapp.serviceconstructor.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: coffee-miniapp
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - coffee-miniapp.serviceconstructor.dev
+      secretName: coffee-miniapp-serviceconstructor-dev-tls

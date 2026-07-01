@@ -1,0 +1,86 @@
+# wallet-shell (personal cabinet): SPA + BFF in one pod, exposed at
+# https://app.serviceconstructor.dev. The BFF proxies to auth (:8090) and
+# engine (:8080), holding the session JWT in an httpOnly cookie.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wallet-shell
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wallet-shell
+  template:
+    metadata:
+      labels:
+        app: wallet-shell
+    spec:
+      containers:
+        - name: wallet-shell
+          image: serviceconstructor-shell:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4200
+              name: http
+          env:
+            - name: CABINET_PORT
+              value: "4200"
+            - name: SERVE_STATIC
+              value: "1"
+            - name: AUTH_BASE_URL
+              value: "http://auth:8090"
+            - name: PLATFORM_BASE_URL
+              value: "http://engine:8080"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 4200
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 4200
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wallet-shell
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: wallet-shell
+  ports:
+    - name: http
+      port: 4200
+      targetPort: 4200
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wallet-shell
+  namespace: serviceconstructor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/upstream-vhost: app.serviceconstructor.dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: app.serviceconstructor.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: wallet-shell
+                port:
+                  number: 4200
+  tls:
+    - hosts:
+        - app.serviceconstructor.dev
+      secretName: app-serviceconstructor-dev-tls

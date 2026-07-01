@@ -1164,7 +1164,7 @@ const file_serviceconstructor_v1_service_proto_rawDesc = "" +
 	"\rUpdateService\x12+.serviceconstructor.v1.UpdateServiceRequest\x1a\x1e.serviceconstructor.v1.Service\"8\x82\xd3\xe4\x93\x022:\aservice2'/v1/admin/services/{service.service_id}\x12\x93\x01\n" +
 	"\rDeleteService\x12+.serviceconstructor.v1.DeleteServiceRequest\x1a,.serviceconstructor.v1.DeleteServiceResponse\"'\x82\xd3\xe4\x93\x02!*\x1f/v1/admin/services/{service_id}\x12\xaa\x01\n" +
 	"\x12GenerateServiceKey\x120.serviceconstructor.v1.GenerateServiceKeyRequest\x1a1.serviceconstructor.v1.GenerateServiceKeyResponse\"/\x82\xd3\xe4\x93\x02):\x01*\"$/v1/admin/services/{service_id}/keys\x12\xac\x01\n" +
-	"\x10RotateServiceKey\x12..serviceconstructor.v1.RotateServiceKeyRequest\x1a1.serviceconstructor.v1.GenerateServiceKeyResponse\"5\x82\xd3\xe4\x93\x02/:\x01*\"*/v1/admin/services/{service_id}/rotate-keyBFZDgithub.com/nvsces/service-constructor/gen/serviceconstructor/v1;scv1b\x06proto3"
+	"\x10RotateServiceKey\x12..serviceconstructor.v1.RotateServiceKeyRequest\x1a1.serviceconstructor.v1.GenerateServiceKeyResponse\"5\x82\xd3\xe4\x93\x02/:\x01*\"*/v1/admin/services/{service_id}/rotate-keyBFZDgithub.com/service-constructor/engine/gen/serviceconstructor/v1;scv1b\x06proto3"
 
 var (
 	file_serviceconstructor_v1_service_proto_rawDescOnce sync.Once

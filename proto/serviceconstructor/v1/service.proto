@@ -6,7 +6,7 @@ import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/field_mask.proto";
 
-option go_package = "github.com/nvsces/service-constructor/gen/serviceconstructor/v1;scv1";
+option go_package = "github.com/service-constructor/engine/gen/serviceconstructor/v1;scv1";
 
 // ServiceRegistry manages the lifecycle of registered services.
 //

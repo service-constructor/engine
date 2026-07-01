@@ -1,0 +1,57 @@
+# Ledger service: gRPC only, internal. Applies its own migrations at startup.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ledger
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ledger
+  template:
+    metadata:
+      labels:
+        app: ledger
+    spec:
+      containers:
+        - name: ledger
+          image: serviceconstructor-ledger:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9100
+              name: grpc
+          env:
+            - name: GRPC_ADDR
+              value: ":9100"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: serviceconstructor-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgres://sc:$(POSTGRES_PASSWORD)@postgres:5432/ledger?sslmode=disable"
+          readinessProbe:
+            tcpSocket:
+              port: 9100
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 9100
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ledger
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: ledger
+  ports:
+    - name: grpc
+      port: 9100
+      targetPort: 9100

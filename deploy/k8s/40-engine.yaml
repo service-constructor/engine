@@ -1,0 +1,86 @@
+# Engine: gRPC (:9090, internal) + HTTP/JSON gateway (:8080, exposed via Ingress).
+# Applies its own migrations at startup. Talks to the real ledger over gRPC.
+#
+# Demo posture:
+#   LEDGER_MODE=grpc      -> real ledger service (full-stack demo)
+#   EXECUTOR_MODE=mock    -> no external provider needed; execute returns SUCCESS
+#   CONSENT_MODE=none     -> /pay trusts the authenticated session (no device key)
+#   AUTH_MODE=jwt         -> built-in JWT auth (secret from Secret)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: engine
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: engine
+  template:
+    metadata:
+      labels:
+        app: engine
+    spec:
+      containers:
+        - name: engine
+          image: serviceconstructor-engine:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9090
+              name: grpc
+          env:
+            - name: GRPC_ADDR
+              value: ":9090"
+            - name: HTTP_ADDR
+              value: ":8080"
+            - name: LEDGER_MODE
+              value: "grpc"
+            - name: LEDGER_ADDR
+              value: "ledger:9100"
+            - name: EXECUTOR_MODE
+              value: "http"
+            - name: CONSENT_MODE
+              value: "none"
+            - name: AUTH_MODE
+              value: "jwt"
+            - name: AUTH_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: serviceconstructor-secrets
+                  key: AUTH_JWT_SECRET
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: serviceconstructor-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgres://sc:$(POSTGRES_PASSWORD)@postgres:5432/service_constructor?sslmode=disable"
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: engine
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: engine
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+    - name: grpc
+      port: 9090
+      targetPort: 9090

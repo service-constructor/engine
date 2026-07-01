@@ -18,15 +18,15 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	scv1 "github.com/nvsces/service-constructor/gen/serviceconstructor/v1"
-	"github.com/nvsces/service-constructor/internal/auth"
-	"github.com/nvsces/service-constructor/internal/config"
-	"github.com/nvsces/service-constructor/internal/domain"
-	"github.com/nvsces/service-constructor/internal/ledgerclient"
-	"github.com/nvsces/service-constructor/internal/repository/postgres"
-	"github.com/nvsces/service-constructor/internal/saga"
-	"github.com/nvsces/service-constructor/internal/server"
-	"github.com/nvsces/service-constructor/internal/service"
+	scv1 "github.com/service-constructor/engine/gen/serviceconstructor/v1"
+	"github.com/service-constructor/engine/internal/auth"
+	"github.com/service-constructor/engine/internal/config"
+	"github.com/service-constructor/engine/internal/domain"
+	"github.com/service-constructor/engine/internal/ledgerclient"
+	"github.com/service-constructor/engine/internal/repository/postgres"
+	"github.com/service-constructor/engine/internal/saga"
+	"github.com/service-constructor/engine/internal/server"
+	"github.com/service-constructor/engine/internal/service"
 )
 
 // registryLookup adapts the service Registry to saga.ServiceLookup. Payment is

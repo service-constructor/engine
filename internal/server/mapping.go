@@ -3,9 +3,9 @@ package server
 import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	scv1 "github.com/nvsces/service-constructor/gen/serviceconstructor/v1"
-	"github.com/nvsces/service-constructor/internal/domain"
-	"github.com/nvsces/service-constructor/internal/keygen"
+	scv1 "github.com/service-constructor/engine/gen/serviceconstructor/v1"
+	"github.com/service-constructor/engine/internal/domain"
+	"github.com/service-constructor/engine/internal/keygen"
 )
 
 // algToDomain maps the proto key algorithm enum to the keygen algorithm.

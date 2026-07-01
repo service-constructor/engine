@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nvsces/service-constructor/internal/domain"
+	"github.com/service-constructor/engine/internal/domain"
 )
 
 // TestCrossLanguageQuoteSignature verifies that a quote signed by the Node/TS

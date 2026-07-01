@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nvsces/service-constructor/internal/domain"
+	"github.com/service-constructor/engine/internal/domain"
 )
 
 // pendingOrder drives a fresh order to PENDING and returns the orchestrator,
