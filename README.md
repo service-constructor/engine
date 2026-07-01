@@ -43,8 +43,8 @@ make docker-up
 # 2. Run the API (applies migrations on startup)
 AUTH_MODE=none make run        # dev: no auth; or AUTH_JWT_SECRET=... make run
 
-# 3. Run the admin UI (separate terminal)
-cd admin-ui && npm install && npm run dev   # http://localhost:5173
+# 3. Run the admin UI (separate repo, separate terminal)
+cd ../admin-ui && npm install && npm run dev   # http://localhost:5173
 ```
 
 Defaults (override via env): `GRPC_ADDR=:9090`, `HTTP_ADDR=:8080`,
@@ -60,10 +60,10 @@ their existing identity system without forking the app:
   the gRPC interceptor. Built-ins: `jwt` (HMAC JWT, reads `Authorization:
   Bearer`) and `none` (dev only, accepts everything). Selected via `AUTH_MODE`;
   swap `buildAuthenticator` in `cmd/server/main.go` for a custom one.
-- **Frontend** — implement the `TokenProvider` interface
-  (`admin-ui/src/auth/types.ts`) and change the one export in
-  `admin-ui/src/auth/index.ts`. The default keeps a token in localStorage; swap
-  it to source the token from an SSO cookie, OAuth flow, etc.
+- **Frontend** — the admin UI lives in the separate `admin-ui` repo. Implement
+  the `TokenProvider` interface (`src/auth/types.ts`) and change the one export
+  in `src/auth/index.ts`. The default keeps a token in localStorage; swap it to
+  source the token from an SSO cookie, OAuth flow, etc.
 
 The admin API requires the `admin` role; the interceptor returns `401` when
 unauthenticated and `403` without the role.
@@ -76,11 +76,12 @@ cross-owner read/update/delete returns `404`.
 
 ## Admin UI
 
-`admin-ui/` is a React + Vite + TypeScript SPA: list, create, edit and delete
-services, plus generate/rotate service keys. Key generation runs on the backend
-(Ed25519 or EC P-256); the **private key PEM is returned once** and never stored
-— the UI shows a copy/download dialog. In dev, Vite proxies `/v1` to the gateway
-on `:8080`; in prod, co-host the built `dist/` behind the API or set
+The admin console lives in its **own repository** (`../admin-ui`) — a React +
+Vite + TypeScript SPA to list, create, edit and delete services, plus
+generate/rotate service keys. Key generation runs on the backend (Ed25519 or
+EC P-256); the **private key PEM is returned once** and never stored — the UI
+shows a copy/download dialog. In dev, Vite proxies `/v1` to the gateway on
+`:8080`; in prod, co-host the built `dist/` behind the API or set
 `VITE_API_BASE`.
 
 ## REST API (via gateway)
@@ -141,12 +142,26 @@ closes the "capture happened but order not marked" gap (white paper §11): a
 crash between marking the order and touching the ledger leaves a durable outbox
 row that is simply re-applied.
 
+**Audit trail.** Every accepted edge of the saga state machine is written to an
+**append-only** `order_transitions` table (`from_state → to_state` with a machine
+`reason` tag and a per-order `seq`), in the **same transaction** as the order
+`UPDATE` — and, for capture/release, alongside the `outbox` row. Rows are only
+ever inserted, so the history can never diverge from the order's current state
+and gives a tamper-evident record of exactly how each order reached its terminal
+state (white paper §8). Read it via `OrderStore.ListTransitions(orderId)`.
+
 The `Ledger` (freeze/capture/release) and `Executor` (provider executeUrl) are
-**ports**. The Ledger ships as an in-memory mock; the Executor has a real HTTP
+**ports**. The Ledger has a real gRPC implementation (`LEDGER_MODE=grpc`,
+`LEDGER_ADDR=host:port`) that settles against the standalone
+[ledger](../ledger) double-entry service — freeze debits available/credits held,
+capture pays the service (net) and platform (fee), release compensates; a
+wallet with no funds makes freeze fail and the order is `REJECTED`. It also ships
+an in-memory mock (`LEDGER_MODE=mock`, the default). The Executor has a real HTTP
 implementation (`EXECUTOR_MODE=http`) that POSTs to each service's `executeUrl`
 with a timeout, bounded idempotent retries (backoff), and a per-service circuit
 breaker — and a mock for local runs (`EXECUTOR_MODE=mock`, the default). A
-`DeviceKeyResolver` supplies device public keys (static for local runs).
+`DeviceKeyResolver` supplies device public keys (used only when
+`CONSENT_MODE=device`; `CONSENT_MODE=none` trusts the authenticated session).
 
 See [`example-service`](../example-service) for a runnable reference service the
 HTTP executor calls end-to-end.
@@ -190,5 +205,6 @@ vendored under `third_party/` (no Buf Schema Registry auth required).
 - [x] Reconciler with query-before-compensate (polls service `statusUrl`)
 - [x] Real HTTP Executor (timeout, idempotent retries with backoff, circuit breaker)
 - [x] Transactional outbox + dispatcher (capture/release applied idempotently)
+- [x] Append-only order transition history (audit trail of the saga)
 - [ ] Real Ledger adapter (mock ships today)
 - [ ] Server SDK for service integrators

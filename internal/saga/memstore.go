@@ -12,24 +12,37 @@ import (
 // tests. The outbox lives in the same struct so SaveWithOutbox is atomic under
 // the single mutex.
 type MemOrderStore struct {
-	mu      sync.Mutex
-	byID    map[string]*domain.Order
-	byNonce map[string]string // serviceID|nonce -> orderID
-	outbox  []*domain.OutboxEntry
-	nextID  int64
+	mu          sync.Mutex
+	byID        map[string]*domain.Order
+	byNonce     map[string]string                    // serviceID|nonce -> orderID
+	transitions map[string][]*domain.OrderTransition // orderID -> append-only trail
+	outbox      []*domain.OutboxEntry
+	nextID      int64
+	nextTransID int64
 }
 
 // NewMemOrderStore builds an empty store.
 func NewMemOrderStore() *MemOrderStore {
 	return &MemOrderStore{
-		byID:    map[string]*domain.Order{},
-		byNonce: map[string]string{},
+		byID:        map[string]*domain.Order{},
+		byNonce:     map[string]string{},
+		transitions: map[string][]*domain.OrderTransition{},
 	}
 }
 
 func nonceKey(serviceID, nonce string) string { return serviceID + "|" + nonce }
 
-func (s *MemOrderStore) Create(_ context.Context, o *domain.Order) error {
+// recordTransition appends an audit row, assigning Seq as the next per-order
+// counter. Caller must hold s.mu.
+func (s *MemOrderStore) recordTransition(rec *domain.OrderTransition) {
+	s.nextTransID++
+	cp := *rec
+	cp.ID = s.nextTransID
+	cp.Seq = len(s.transitions[rec.OrderID]) + 1
+	s.transitions[rec.OrderID] = append(s.transitions[rec.OrderID], &cp)
+}
+
+func (s *MemOrderStore) Create(_ context.Context, o *domain.Order, rec *domain.OrderTransition) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.byID[o.ID]; ok {
@@ -41,6 +54,7 @@ func (s *MemOrderStore) Create(_ context.Context, o *domain.Order) error {
 	cp := *o
 	s.byID[o.ID] = &cp
 	s.byNonce[nonceKey(o.ServiceID, o.QuoteNonce)] = o.ID
+	s.recordTransition(rec)
 	return nil
 }
 
@@ -66,7 +80,7 @@ func (s *MemOrderStore) FindByNonce(_ context.Context, serviceID, nonce string) 
 	return &cp, nil
 }
 
-func (s *MemOrderStore) Save(_ context.Context, o *domain.Order) error {
+func (s *MemOrderStore) Save(_ context.Context, o *domain.Order, rec *domain.OrderTransition) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.byID[o.ID]; !ok {
@@ -74,10 +88,11 @@ func (s *MemOrderStore) Save(_ context.Context, o *domain.Order) error {
 	}
 	cp := *o
 	s.byID[o.ID] = &cp
+	s.recordTransition(rec)
 	return nil
 }
 
-func (s *MemOrderStore) SaveWithOutbox(_ context.Context, o *domain.Order, entry *domain.OutboxEntry) error {
+func (s *MemOrderStore) SaveWithOutbox(_ context.Context, o *domain.Order, rec *domain.OrderTransition, entry *domain.OutboxEntry) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.byID[o.ID]; !ok {
@@ -85,11 +100,23 @@ func (s *MemOrderStore) SaveWithOutbox(_ context.Context, o *domain.Order, entry
 	}
 	cp := *o
 	s.byID[o.ID] = &cp
+	s.recordTransition(rec)
 	s.nextID++
 	e := *entry
 	e.ID = s.nextID
 	s.outbox = append(s.outbox, &e)
 	return nil
+}
+
+func (s *MemOrderStore) ListTransitions(_ context.Context, orderID string) ([]*domain.OrderTransition, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []*domain.OrderTransition
+	for _, t := range s.transitions[orderID] {
+		cp := *t
+		out = append(out, &cp)
+	}
+	return out, nil
 }
 
 func (s *MemOrderStore) ListUndispatched(_ context.Context, limit int) ([]*domain.OutboxEntry, error) {

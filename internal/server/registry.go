@@ -165,6 +165,18 @@ func mergeUpdate(current *domain.Service, in *scv1.Service, paths []string) *dom
 	if set("status_url") {
 		out.StatusURL = incoming.StatusURL
 	}
+	if set("encryption_public_key") {
+		out.EncryptionPublicKey = incoming.EncryptionPublicKey
+	}
+	if set("description") {
+		out.Description = incoming.Description
+	}
+	if set("icon_url") {
+		out.IconURL = incoming.IconURL
+	}
+	if set("miniapp_url") {
+		out.MiniappURL = incoming.MiniappURL
+	}
 	if set("receiving_wallets") {
 		out.ReceivingWallets = incoming.ReceivingWallets
 	}

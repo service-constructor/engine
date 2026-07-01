@@ -96,13 +96,18 @@ func (d *Dispatcher) apply(ctx context.Context, e *domain.OutboxEntry) error {
 	case domain.OutboxCapture:
 		return d.ledger.Capture(ctx, CaptureRequest{
 			OrderID:           e.OrderID,
+			WalletID:          str(e.Payload["walletId"]),
 			Net:               str(e.Payload["net"]),
 			Fee:               str(e.Payload["fee"]),
 			ReceivingWalletID: str(e.Payload["receivingWalletId"]),
 			CurrencyID:        int64FromAny(e.Payload["currencyId"]),
 		})
 	case domain.OutboxRelease:
-		return d.ledger.Release(ctx, e.OrderID)
+		return d.ledger.Release(ctx, ReleaseRequest{
+			OrderID:    e.OrderID,
+			WalletID:   str(e.Payload["walletId"]),
+			CurrencyID: int64FromAny(e.Payload["currencyId"]),
+		})
 	default:
 		return fmt.Errorf("unknown outbox op %q", e.Op)
 	}

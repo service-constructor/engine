@@ -22,6 +22,7 @@ import (
 	"github.com/nvsces/service-constructor/internal/auth"
 	"github.com/nvsces/service-constructor/internal/config"
 	"github.com/nvsces/service-constructor/internal/domain"
+	"github.com/nvsces/service-constructor/internal/ledgerclient"
 	"github.com/nvsces/service-constructor/internal/repository/postgres"
 	"github.com/nvsces/service-constructor/internal/saga"
 	"github.com/nvsces/service-constructor/internal/server"
@@ -36,6 +37,29 @@ type registryLookup struct {
 
 func (l registryLookup) Lookup(ctx context.Context, serviceID string) (*domain.Service, error) {
 	return l.reg.Get(ctx, service.ScopeAll, serviceID)
+}
+
+// ListActive returns all ACTIVE services (unscoped) for the public catalog the
+// shell renders. Paginates through the registry to gather every page.
+func (l registryLookup) ListActive(ctx context.Context) ([]*domain.Service, error) {
+	var all []*domain.Service
+	token := ""
+	for {
+		page, next, err := l.reg.List(ctx, service.ScopeAll, service.ListFilter{
+			Status:    domain.StatusActive,
+			PageSize:  100,
+			PageToken: token,
+		})
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, page...)
+		if next == "" {
+			break
+		}
+		token = next
+	}
+	return all, nil
 }
 
 func main() {
@@ -77,15 +101,23 @@ func run(log *slog.Logger) error {
 	// are applied from the outbox).
 	orderRepo := postgres.NewOrderRepository(pool)
 	executor := buildExecutor(cfg, log)
-	ledger := saga.NewMockLedger()
+	ledger, closeLedger, err := buildLedger(cfg, log)
+	if err != nil {
+		return err
+	}
+	defer closeLedger()
 	orch := saga.New(
 		registryLookup{reg},
 		orderRepo,
 		ledger,
 		executor,
 		saga.StaticDeviceKeyResolver{PEM: cfg.DeviceKeyPEM},
+		saga.WithRequireConsent(cfg.ConsentMode != "none"),
 	)
-	paymentSrv := server.NewPaymentServer(orch, orderRepo)
+	if cfg.ConsentMode == "none" {
+		log.Warn("CONSENT_MODE=none: /pay trusts the authenticated session; no device-signed consent required")
+	}
+	paymentSrv := server.NewPaymentServer(orch, orderRepo, registryLookup{reg})
 
 	// Reconciler: background process that finalizes stuck orders, querying the
 	// service statusUrl before any compensation (query-before-compensate).
@@ -196,4 +228,20 @@ func buildExecutor(cfg config.Config, log *slog.Logger) saga.Executor {
 		mockExec.Result = saga.ExecuteResult{Status: saga.ExecuteStatus(s), ExternalRef: "mock-ref"}
 	}
 	return mockExec
+}
+
+// buildLedger selects the settlement backend. LEDGER_MODE=grpc settles against
+// the real ledger service; "mock" (default) uses an in-memory ledger. It returns
+// a cleanup func (a no-op for the mock) the caller defers.
+func buildLedger(cfg config.Config, log *slog.Logger) (saga.Ledger, func(), error) {
+	if cfg.LedgerMode == "grpc" {
+		log.Info("using gRPC ledger", "addr", cfg.LedgerAddr)
+		c, err := ledgerclient.Dial(cfg.LedgerAddr)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c, func() { _ = c.Close() }, nil
+	}
+	log.Info("using mock ledger", "mode", cfg.LedgerMode)
+	return saga.NewMockLedger(), func() {}, nil
 }

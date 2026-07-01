@@ -55,12 +55,16 @@ func protoToDomain(p *scv1.Service) *domain.Service {
 		return &domain.Service{}
 	}
 	d := &domain.Service{
-		ID:         p.GetServiceId(),
-		Name:       p.GetName(),
-		Origins:    p.GetOrigins(),
-		ExecuteURL: p.GetExecuteUrl(),
-		StatusURL:  p.GetStatusUrl(),
-		Status:     statusToDomain(p.GetStatus()),
+		ID:                  p.GetServiceId(),
+		Name:                p.GetName(),
+		Origins:             p.GetOrigins(),
+		ExecuteURL:          p.GetExecuteUrl(),
+		StatusURL:           p.GetStatusUrl(),
+		EncryptionPublicKey: p.GetEncryptionPublicKey(),
+		Description:         p.GetDescription(),
+		IconURL:             p.GetIconUrl(),
+		MiniappURL:          p.GetMiniappUrl(),
+		Status:              statusToDomain(p.GetStatus()),
 	}
 	for _, k := range p.GetPublicKeys() {
 		d.PublicKeys = append(d.PublicKeys, domain.PublicKey{KID: k.GetKid(), PEM: k.GetPem()})
@@ -83,15 +87,19 @@ func protoToDomain(p *scv1.Service) *domain.Service {
 // domainToProto converts a stored domain Service into its proto representation.
 func domainToProto(d *domain.Service) *scv1.Service {
 	p := &scv1.Service{
-		ServiceId:  d.ID,
-		OwnerId:    d.OwnerID,
-		Name:       d.Name,
-		Origins:    d.Origins,
-		ExecuteUrl: d.ExecuteURL,
-		StatusUrl:  d.StatusURL,
-		Status:     statusToProto(d.Status),
-		Fee:        &scv1.Fee{Percent: d.Fee.Percent, Fixed: d.Fee.Fixed},
-		Limits:     &scv1.Limits{MaxAmount: d.Limits.MaxAmount, PerHour: d.Limits.PerHour},
+		ServiceId:           d.ID,
+		OwnerId:             d.OwnerID,
+		Name:                d.Name,
+		Origins:             d.Origins,
+		ExecuteUrl:          d.ExecuteURL,
+		StatusUrl:           d.StatusURL,
+		EncryptionPublicKey: d.EncryptionPublicKey,
+		Description:         d.Description,
+		IconUrl:             d.IconURL,
+		MiniappUrl:          d.MiniappURL,
+		Status:              statusToProto(d.Status),
+		Fee:                 &scv1.Fee{Percent: d.Fee.Percent, Fixed: d.Fee.Fixed},
+		Limits:              &scv1.Limits{MaxAmount: d.Limits.MaxAmount, PerHour: d.Limits.PerHour},
 	}
 	for _, k := range d.PublicKeys {
 		p.PublicKeys = append(p.PublicKeys, &scv1.PublicKey{Kid: k.KID, Pem: k.PEM})

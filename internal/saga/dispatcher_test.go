@@ -34,13 +34,15 @@ func (f *flakyLedger) Capture(ctx context.Context, req CaptureRequest) error {
 
 func seedCaptureEntry(store *MemOrderStore, orderID string) {
 	order := &domain.Order{ID: orderID, ServiceID: "s", QuoteNonce: "n-" + orderID, State: domain.OrderExecuted}
-	_ = store.Create(context.Background(), order)
+	_ = store.Create(context.Background(), order, &domain.OrderTransition{OrderID: orderID, ToState: domain.OrderExecuted, Reason: "seed"})
 	order.State = domain.OrderCompleted
-	_ = store.SaveWithOutbox(context.Background(), order, &domain.OutboxEntry{
-		OrderID: orderID,
-		Op:      domain.OutboxCapture,
-		Payload: map[string]any{"net": "4.75", "fee": "0.25", "receivingWalletId": "wlt_r", "currencyId": int64(1)},
-	})
+	_ = store.SaveWithOutbox(context.Background(), order,
+		&domain.OrderTransition{OrderID: orderID, FromState: domain.OrderExecuted, ToState: domain.OrderCompleted, Reason: "seed"},
+		&domain.OutboxEntry{
+			OrderID: orderID,
+			Op:      domain.OutboxCapture,
+			Payload: map[string]any{"net": "4.75", "fee": "0.25", "receivingWalletId": "wlt_r", "currencyId": int64(1)},
+		})
 }
 
 func TestDispatcherAppliesCapture(t *testing.T) {
@@ -102,11 +104,13 @@ func TestDispatcherReleaseOp(t *testing.T) {
 	store := NewMemOrderStore()
 	ledger := NewMockLedger()
 	order := &domain.Order{ID: "ord_rel", ServiceID: "s", QuoteNonce: "n", State: domain.OrderFailed}
-	_ = store.Create(context.Background(), order)
+	_ = store.Create(context.Background(), order, &domain.OrderTransition{OrderID: "ord_rel", ToState: domain.OrderFailed, Reason: "seed"})
 	order.State = domain.OrderReleased
-	_ = store.SaveWithOutbox(context.Background(), order, &domain.OutboxEntry{
-		OrderID: "ord_rel", Op: domain.OutboxRelease, Payload: map[string]any{},
-	})
+	_ = store.SaveWithOutbox(context.Background(), order,
+		&domain.OrderTransition{OrderID: "ord_rel", FromState: domain.OrderFailed, ToState: domain.OrderReleased, Reason: "seed"},
+		&domain.OutboxEntry{
+			OrderID: "ord_rel", Op: domain.OutboxRelease, Payload: map[string]any{},
+		})
 
 	d := NewDispatcher(store, ledger, quietLog())
 	if _, err := d.DispatchOnce(context.Background()); err != nil {

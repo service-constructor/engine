@@ -28,9 +28,15 @@ const orderColumns = `order_id, service_id, user_id, wallet_id, amount, currency
 	quote_nonce, fee, net, external_ref, metadata, state, freeze_expires_at,
 	created_at, updated_at`
 
-func (r *OrderRepository) Create(ctx context.Context, o *domain.Order) error {
+func (r *OrderRepository) Create(ctx context.Context, o *domain.Order, rec *domain.OrderTransition) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) // no-op after Commit
+
 	meta := marshalMeta(o.Metadata)
-	_, err := r.pool.Exec(ctx, `
+	_, err = tx.Exec(ctx, `
 		INSERT INTO orders (`+orderColumns+`)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
 		o.ID, o.ServiceID, o.UserID, o.WalletID, o.Amount, o.CurrencyID,
@@ -44,7 +50,10 @@ func (r *OrderRepository) Create(ctx context.Context, o *domain.Order) error {
 	if err != nil {
 		return fmt.Errorf("insert order: %w", err)
 	}
-	return nil
+	if err := insertTransition(ctx, tx, rec); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *OrderRepository) Get(ctx context.Context, id string) (*domain.Order, error) {
@@ -79,7 +88,7 @@ type pgExecutor interface {
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
 }
 
-func saveOrder(ctx context.Context, db pgExecutor, o *domain.Order) error {
+func saveOrder(ctx context.Context, db pgExecutor, o *domain.Order, rec *domain.OrderTransition) error {
 	meta := marshalMeta(o.Metadata)
 	tag, err := db.Exec(ctx, `
 		UPDATE orders SET
@@ -96,23 +105,56 @@ func saveOrder(ctx context.Context, db pgExecutor, o *domain.Order) error {
 	if tag.RowsAffected() == 0 {
 		return domain.ErrOrderNotFound
 	}
+	return insertTransition(ctx, db, rec)
+}
+
+// insertTransition appends one append-only audit row. Seq is assigned inside the
+// INSERT as (max existing seq for the order)+1, so it is monotonic per order and
+// safe under the same transaction as the order state change. The
+// (order_id, seq) unique index rejects any duplicate step.
+func insertTransition(ctx context.Context, db pgExecutor, rec *domain.OrderTransition) error {
+	meta := marshalMeta(rec.Metadata)
+	var fromState *string
+	if rec.FromState != "" {
+		s := string(rec.FromState)
+		fromState = &s
+	}
+	_, err := db.Exec(ctx, `
+		INSERT INTO order_transitions
+			(order_id, seq, from_state, to_state, reason, metadata, created_at)
+		SELECT $1,
+			COALESCE((SELECT MAX(seq) FROM order_transitions WHERE order_id = $1), 0) + 1,
+			$2, $3, $4, $5, $6`,
+		rec.OrderID, fromState, string(rec.ToState), rec.Reason, meta, rec.CreatedAt,
+	)
+	if err != nil {
+		return fmt.Errorf("insert order transition: %w", err)
+	}
 	return nil
 }
 
-func (r *OrderRepository) Save(ctx context.Context, o *domain.Order) error {
-	return saveOrder(ctx, r.pool, o)
+func (r *OrderRepository) Save(ctx context.Context, o *domain.Order, rec *domain.OrderTransition) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) // no-op after Commit
+	if err := saveOrder(ctx, tx, o, rec); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
-// SaveWithOutbox persists the order transition and the outbox entry in one
-// transaction, so they commit atomically (white paper section 11).
-func (r *OrderRepository) SaveWithOutbox(ctx context.Context, o *domain.Order, entry *domain.OutboxEntry) error {
+// SaveWithOutbox persists the order transition, its audit row, and the outbox
+// entry in one transaction, so they commit atomically (white paper section 11).
+func (r *OrderRepository) SaveWithOutbox(ctx context.Context, o *domain.Order, rec *domain.OrderTransition, entry *domain.OutboxEntry) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin tx: %w", err)
 	}
 	defer tx.Rollback(ctx) // no-op after Commit
 
-	if err := saveOrder(ctx, tx, o); err != nil {
+	if err := saveOrder(ctx, tx, o, rec); err != nil {
 		return err
 	}
 	payload, err := json.Marshal(entry.Payload)
@@ -201,6 +243,44 @@ func (r *OrderRepository) ListStuck(ctx context.Context, olderThan time.Time, li
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate stuck orders: %w", err)
+	}
+	return out, nil
+}
+
+// ListTransitions returns an order's append-only audit trail in seq order.
+func (r *OrderRepository) ListTransitions(ctx context.Context, orderID string) ([]*domain.OrderTransition, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, order_id, seq, from_state, to_state, reason, metadata, created_at
+		FROM order_transitions WHERE order_id = $1 ORDER BY seq`, orderID)
+	if err != nil {
+		return nil, fmt.Errorf("list transitions: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.OrderTransition
+	for rows.Next() {
+		var (
+			t         domain.OrderTransition
+			fromState *string
+			toState   string
+			meta      []byte
+		)
+		if err := rows.Scan(&t.ID, &t.OrderID, &t.Seq, &fromState, &toState, &t.Reason, &meta, &t.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan transition: %w", err)
+		}
+		if fromState != nil {
+			t.FromState = domain.OrderState(*fromState)
+		}
+		t.ToState = domain.OrderState(toState)
+		if len(meta) > 0 {
+			if err := json.Unmarshal(meta, &t.Metadata); err != nil {
+				return nil, fmt.Errorf("decode transition metadata: %w", err)
+			}
+		}
+		out = append(out, &t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate transitions: %w", err)
 	}
 	return out, nil
 }

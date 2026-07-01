@@ -14,22 +14,34 @@ import (
 	"github.com/nvsces/service-constructor/internal/saga"
 )
 
+// ServiceLookup resolves services, unscoped. GetServiceInfo uses Lookup to
+// return public info for one service; ListServiceInfo uses ListActive to return
+// the public catalog of ACTIVE services a shell can render.
+type ServiceLookup interface {
+	Lookup(ctx context.Context, serviceID string) (*domain.Service, error)
+	ListActive(ctx context.Context) ([]*domain.Service, error)
+}
+
 // PaymentServer adapts the PaymentService gRPC contract to the saga
 // orchestrator.
 type PaymentServer struct {
 	scv1.UnimplementedPaymentServiceServer
-	orch   *saga.Orchestrator
-	orders saga.OrderStore
+	orch     *saga.Orchestrator
+	orders   saga.OrderStore
+	services ServiceLookup
 }
 
 // NewPaymentServer wires the payment adapter.
-func NewPaymentServer(orch *saga.Orchestrator, orders saga.OrderStore) *PaymentServer {
-	return &PaymentServer{orch: orch, orders: orders}
+func NewPaymentServer(orch *saga.Orchestrator, orders saga.OrderStore, services ServiceLookup) *PaymentServer {
+	return &PaymentServer{orch: orch, orders: orders, services: services}
 }
 
 func (s *PaymentServer) Pay(ctx context.Context, req *scv1.PayRequest) (*scv1.Order, error) {
-	if req.GetQuote() == nil || req.GetConsent() == nil {
-		return nil, status.Error(codes.InvalidArgument, "quote and consent are required")
+	// Consent is optional: when the platform runs CONSENT_MODE=none, a trusted
+	// shell pays over the authenticated session with no device-signed consent.
+	// The orchestrator enforces consent only when configured to require it.
+	if req.GetQuote() == nil {
+		return nil, status.Error(codes.InvalidArgument, "quote is required")
 	}
 
 	// The authenticated session identifies the user; quote.userId is checked
@@ -81,6 +93,44 @@ func (s *PaymentServer) GetOrder(ctx context.Context, req *scv1.GetOrderRequest)
 		return nil, status.Error(codes.NotFound, domain.ErrOrderNotFound.Error())
 	}
 	return orderToProto(order), nil
+}
+
+func (s *PaymentServer) GetServiceInfo(ctx context.Context, req *scv1.GetServiceInfoRequest) (*scv1.ServiceInfo, error) {
+	if req.GetServiceId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "service_id is required")
+	}
+	svc, err := s.services.Lookup(ctx, req.GetServiceId())
+	if err != nil {
+		return nil, payErrToStatus(err)
+	}
+	return serviceInfoToProto(svc), nil
+}
+
+// ListServiceInfo returns the public catalog of ACTIVE services so a shell can
+// render its app list. Returns no secrets — only the public ServiceInfo view.
+func (s *PaymentServer) ListServiceInfo(ctx context.Context, _ *scv1.ListServiceInfoRequest) (*scv1.ListServiceInfoResponse, error) {
+	svcs, err := s.services.ListActive(ctx)
+	if err != nil {
+		return nil, payErrToStatus(err)
+	}
+	out := make([]*scv1.ServiceInfo, 0, len(svcs))
+	for _, svc := range svcs {
+		out = append(out, serviceInfoToProto(svc))
+	}
+	return &scv1.ListServiceInfoResponse{Services: out}, nil
+}
+
+// serviceInfoToProto projects a domain Service to its public catalog view.
+func serviceInfoToProto(svc *domain.Service) *scv1.ServiceInfo {
+	return &scv1.ServiceInfo{
+		ServiceId:           svc.ID,
+		Name:                svc.Name,
+		Origins:             svc.Origins,
+		EncryptionPublicKey: svc.EncryptionPublicKey,
+		Description:         svc.Description,
+		IconUrl:             svc.IconURL,
+		MiniappUrl:          svc.MiniappURL,
+	}
 }
 
 func quoteToDomain(q *scv1.Quote) saga.Quote {

@@ -36,6 +36,17 @@ type Config struct {
 	ExecutorMode string
 	// ExecuteTimeout bounds a single execute HTTP call.
 	ExecuteTimeout time.Duration
+
+	// ConsentMode gates device-signed consent on /pay: "device" (default) requires
+	// a device-signed consent; "none" trusts the authenticated session, which is
+	// how a trusted shell (the personal cabinet) drives payment.
+	ConsentMode string
+
+	// LedgerMode selects the settlement backend: "grpc" calls the real ledger
+	// service; "mock" (default for dev) uses an in-memory ledger.
+	LedgerMode string
+	// LedgerAddr is the ledger gRPC endpoint (host:port) when LedgerMode=grpc.
+	LedgerAddr string
 }
 
 // Load reads configuration from the environment, applying defaults.
@@ -50,6 +61,9 @@ func Load() (Config, error) {
 		DeviceKeyPEM:    os.Getenv("DEVICE_KEY_PEM"),
 		ExecutorMode:    env("EXECUTOR_MODE", "mock"),
 		ExecuteTimeout:  10 * time.Second,
+		ConsentMode:     env("CONSENT_MODE", "device"),
+		LedgerMode:      env("LEDGER_MODE", "mock"),
+		LedgerAddr:      env("LEDGER_ADDR", "localhost:9110"),
 	}
 	if c.AuthMode == "jwt" && c.AuthJWTSecret == "" {
 		return Config{}, fmt.Errorf("AUTH_JWT_SECRET is required when AUTH_MODE=jwt (set AUTH_MODE=none for dev)")

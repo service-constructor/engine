@@ -26,6 +26,24 @@ service PaymentService {
     };
   }
 
+  // GetServiceInfo returns a service's public, non-sensitive info (name, origins,
+  // encryption public key) so a shell can open the service. It is unscoped (any
+  // authenticated user may open any service) and returns no secrets.
+  rpc GetServiceInfo(GetServiceInfoRequest) returns (ServiceInfo) {
+    option (google.api.http) = {
+      get: "/v1/services/{service_id}/info"
+    };
+  }
+
+  // ListServiceInfo returns the public catalog of ACTIVE services so a shell
+  // (personal cabinet) can render its app list. Unscoped (any authenticated
+  // user) and returns no secrets — only the public ServiceInfo view.
+  rpc ListServiceInfo(ListServiceInfoRequest) returns (ListServiceInfoResponse) {
+    option (google.api.http) = {
+      get: "/v1/services"
+    };
+  }
+
   // Callback finalizes an async (PENDING) order. The provider posts the final
   // status signed with its private key; the platform verifies it against the
   // service public key. Idempotent by orderId. No user auth: authentication is
@@ -36,6 +54,30 @@ service PaymentService {
       body: "*"
     };
   }
+}
+
+message GetServiceInfoRequest {
+  string service_id = 1;
+}
+
+message ListServiceInfoRequest {}
+
+message ListServiceInfoResponse {
+  repeated ServiceInfo services = 1;
+}
+
+// ServiceInfo is the public view of a service — safe to expose to any shell.
+message ServiceInfo {
+  string service_id = 1;
+  string name = 2;
+  repeated string origins = 3;
+  // encryption_public_key is the service's X25519 public key (base64 raw) the
+  // shell uses to sealed-box encrypt the user id it hands the mini-app.
+  string encryption_public_key = 4;
+  // --- storefront display fields (mirror of Service catalog fields) ---
+  string description = 5;
+  string icon_url = 6;
+  string miniapp_url = 7;
 }
 
 // Quote is the signed payment instruction issued by a service. The platform

@@ -25,3 +25,7 @@ require (
 	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d // indirect
 )
+
+require github.com/nvsces/ledger v0.0.0
+
+replace github.com/nvsces/ledger => ../ledger

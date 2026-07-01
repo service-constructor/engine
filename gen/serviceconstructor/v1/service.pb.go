@@ -378,7 +378,20 @@ type Service struct {
 	// Operation limits.
 	Limits *Limits `protobuf:"bytes,9,opt,name=limits,proto3" json:"limits,omitempty"`
 	// Lifecycle status.
-	Status        ServiceStatus          `protobuf:"varint,10,opt,name=status,proto3,enum=serviceconstructor.v1.ServiceStatus" json:"status,omitempty"`
+	Status ServiceStatus `protobuf:"varint,10,opt,name=status,proto3,enum=serviceconstructor.v1.ServiceStatus" json:"status,omitempty"`
+	// encryption_public_key is the service's X25519 public key (base64 raw, 32
+	// bytes) used to encrypt the user id the shell hands the mini-app. Unlike
+	// public_keys (Ed25519, for verifying signatures), this key is for anonymous
+	// sealed-box encryption; only the service can decrypt with its private key.
+	EncryptionPublicKey string `protobuf:"bytes,14,opt,name=encryption_public_key,json=encryptionPublicKey,proto3" json:"encryption_public_key,omitempty"`
+	// --- Storefront / catalog display fields (public, non-sensitive) ---
+	// description is a short human-readable blurb shown in the shell's app list.
+	Description string `protobuf:"bytes,15,opt,name=description,proto3" json:"description,omitempty"`
+	// icon_url is an emoji or image URL shown as the app's icon in the shell.
+	IconUrl string `protobuf:"bytes,16,opt,name=icon_url,json=iconUrl,proto3" json:"icon_url,omitempty"`
+	// miniapp_url is the web-app URL the shell loads in the WebView when the
+	// user opens this service.
+	MiniappUrl    string                 `protobuf:"bytes,17,opt,name=miniapp_url,json=miniappUrl,proto3" json:"miniapp_url,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -490,6 +503,34 @@ func (x *Service) GetStatus() ServiceStatus {
 		return x.Status
 	}
 	return ServiceStatus_SERVICE_STATUS_UNSPECIFIED
+}
+
+func (x *Service) GetEncryptionPublicKey() string {
+	if x != nil {
+		return x.EncryptionPublicKey
+	}
+	return ""
+}
+
+func (x *Service) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *Service) GetIconUrl() string {
+	if x != nil {
+		return x.IconUrl
+	}
+	return ""
+}
+
+func (x *Service) GetMiniappUrl() string {
+	if x != nil {
+		return x.MiniappUrl
+	}
+	return ""
 }
 
 func (x *Service) GetCreatedAt() *timestamppb.Timestamp {
@@ -1043,7 +1084,7 @@ const file_serviceconstructor_v1_service_proto_rawDesc = "" +
 	"\x06Limits\x12\x1d\n" +
 	"\n" +
 	"max_amount\x18\x01 \x01(\tR\tmaxAmount\x12\x19\n" +
-	"\bper_hour\x18\x02 \x01(\x05R\aperHour\"\xe2\x04\n" +
+	"\bper_hour\x18\x02 \x01(\x05R\aperHour\"\xf4\x05\n" +
 	"\aService\x12\x1d\n" +
 	"\n" +
 	"service_id\x18\x01 \x01(\tR\tserviceId\x12\x12\n" +
@@ -1060,7 +1101,12 @@ const file_serviceconstructor_v1_service_proto_rawDesc = "" +
 	"\x03fee\x18\b \x01(\v2\x1a.serviceconstructor.v1.FeeR\x03fee\x125\n" +
 	"\x06limits\x18\t \x01(\v2\x1d.serviceconstructor.v1.LimitsR\x06limits\x12<\n" +
 	"\x06status\x18\n" +
-	" \x01(\x0e2$.serviceconstructor.v1.ServiceStatusR\x06status\x129\n" +
+	" \x01(\x0e2$.serviceconstructor.v1.ServiceStatusR\x06status\x122\n" +
+	"\x15encryption_public_key\x18\x0e \x01(\tR\x13encryptionPublicKey\x12 \n" +
+	"\vdescription\x18\x0f \x01(\tR\vdescription\x12\x19\n" +
+	"\bicon_url\x18\x10 \x01(\tR\aiconUrl\x12\x1f\n" +
+	"\vminiapp_url\x18\x11 \x01(\tR\n" +
+	"miniappUrl\x129\n" +
 	"\n" +
 	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +

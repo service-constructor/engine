@@ -167,6 +167,90 @@ func TestPayHappyPath(t *testing.T) {
 	}
 }
 
+// trailStates returns the to-states of an order's transition trail, in order.
+func trailStates(t *testing.T, store *MemOrderStore, orderID string) []domain.OrderState {
+	t.Helper()
+	trail, err := store.ListTransitions(context.Background(), orderID)
+	if err != nil {
+		t.Fatalf("ListTransitions: %v", err)
+	}
+	states := make([]domain.OrderState, len(trail))
+	for i, tr := range trail {
+		if tr.Seq != i+1 {
+			t.Errorf("trail[%d].Seq = %d, want %d", i, tr.Seq, i+1)
+		}
+		states[i] = tr.ToState
+	}
+	return states
+}
+
+func TestPayRecordsTransitionTrail(t *testing.T) {
+	svc, devPEM, cmd := buildSignedPay(t)
+	o, store := newOrchWithStore(t, svc, devPEM, NewMockExecutor(), NewMockLedger())
+
+	order, err := o.Pay(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("Pay: %v", err)
+	}
+
+	got := trailStates(t, store, order.ID)
+	want := []domain.OrderState{
+		domain.OrderCreated, domain.OrderFrozen, domain.OrderExecuting,
+		domain.OrderExecuted, domain.OrderCompleted,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("trail = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("trail = %v, want %v", got, want)
+		}
+	}
+
+	// The genesis row has no prior state; every later row chains from the previous.
+	trail, _ := store.ListTransitions(context.Background(), order.ID)
+	if trail[0].FromState != "" {
+		t.Errorf("genesis from-state = %q, want empty", trail[0].FromState)
+	}
+	if trail[0].Reason != "created" {
+		t.Errorf("genesis reason = %q, want created", trail[0].Reason)
+	}
+	for i := 1; i < len(trail); i++ {
+		if trail[i].FromState != trail[i-1].ToState {
+			t.Errorf("trail[%d] from=%s does not chain from prior to=%s",
+				i, trail[i].FromState, trail[i-1].ToState)
+		}
+		if trail[i].Reason == "" {
+			t.Errorf("trail[%d] has empty reason", i)
+		}
+	}
+}
+
+func TestPayFailureRecordsCompensationTrail(t *testing.T) {
+	svc, devPEM, cmd := buildSignedPay(t)
+	exec := &MockExecutor{Result: ExecuteResult{Status: ExecuteFailed, Reason: "out of stock"}}
+	o, store := newOrchWithStore(t, svc, devPEM, exec, NewMockLedger())
+
+	order, err := o.Pay(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("Pay: %v", err)
+	}
+
+	got := trailStates(t, store, order.ID)
+	want := []domain.OrderState{
+		domain.OrderCreated, domain.OrderFrozen, domain.OrderExecuting,
+		domain.OrderFailed, domain.OrderReleased,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("trail = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("trail = %v, want %v", got, want)
+		}
+	}
+}
+
 func TestPayExecuteFailedCompensates(t *testing.T) {
 	svc, devPEM, cmd := buildSignedPay(t)
 	ledger := NewMockLedger()
@@ -240,6 +324,42 @@ func TestPayRejectsUserMismatch(t *testing.T) {
 	_, err := o.Pay(context.Background(), cmd)
 	if err == nil {
 		t.Fatal("expected user mismatch rejection")
+	}
+}
+
+func TestPayWithoutConsentWhenNotRequired(t *testing.T) {
+	svc, devPEM, cmd := buildSignedPay(t)
+	// A trusted-shell command carries no device consent at all.
+	cmd.Consent = Consent{}
+
+	store := NewMemOrderStore()
+	ledger := NewMockLedger()
+	o := New(
+		staticLookup{svc},
+		store,
+		ledger,
+		NewMockExecutor(),
+		StaticDeviceKeyResolver{PEM: devPEM},
+		WithIDGen(func() string { return "ord_noconsent" }),
+		WithRequireConsent(false),
+	)
+
+	order, err := o.Pay(context.Background(), cmd)
+	if err != nil {
+		t.Fatalf("Pay without consent: %v", err)
+	}
+	if order.State != domain.OrderCompleted {
+		t.Fatalf("state = %s, want COMPLETED", order.State)
+	}
+}
+
+func TestPayStillRejectsMissingConsentWhenRequired(t *testing.T) {
+	svc, devPEM, cmd := buildSignedPay(t)
+	cmd.Consent = Consent{} // no consent, but requireConsent defaults to true
+	o := newOrch(t, svc, devPEM, NewMockExecutor(), NewMockLedger())
+
+	if _, err := o.Pay(context.Background(), cmd); err == nil {
+		t.Fatal("expected consent rejection when consent is required")
 	}
 }
 

@@ -30,16 +30,18 @@ func NewServiceRepository(pool *pgxpool.Pool) *ServiceRepository {
 
 // row mirrors the table; nested fields are stored as JSONB.
 const columns = `service_id, owner_id, name, public_keys, origins, execute_url, status_url,
-	receiving_wallets, fee, limits, status, created_at, updated_at`
+	receiving_wallets, fee, limits, status, created_at, updated_at, encryption_public_key,
+	description, icon_url, miniapp_url`
 
 func (r *ServiceRepository) Create(ctx context.Context, s *domain.Service) error {
 	pk, rw, fee, lim := encodeJSON(s)
 
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO services (`+columns+`)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
 		s.ID, s.OwnerID, s.Name, pk, nonNil(s.Origins), s.ExecuteURL, s.StatusURL,
-		rw, fee, lim, string(s.Status), s.CreatedAt, s.UpdatedAt,
+		rw, fee, lim, string(s.Status), s.CreatedAt, s.UpdatedAt, s.EncryptionPublicKey,
+		s.Description, s.IconURL, s.MiniappURL,
 	)
 	if isUniqueViolation(err) {
 		return domain.ErrAlreadyExists
@@ -134,11 +136,13 @@ func (r *ServiceRepository) Update(ctx context.Context, scope service.Scope, s *
 		UPDATE services SET
 			name = $2, public_keys = $3, origins = $4, execute_url = $5,
 			status_url = $6, receiving_wallets = $7, fee = $8, limits = $9,
-			status = $10, updated_at = $11
+			status = $10, updated_at = $11, encryption_public_key = $12,
+			description = $13, icon_url = $14, miniapp_url = $15
 		WHERE service_id = $1`
 	args := []any{
 		s.ID, s.Name, pk, nonNil(s.Origins), s.ExecuteURL, s.StatusURL,
-		rw, fee, lim, string(s.Status), s.UpdatedAt,
+		rw, fee, lim, string(s.Status), s.UpdatedAt, s.EncryptionPublicKey,
+		s.Description, s.IconURL, s.MiniappURL,
 	}
 	if !scope.AllOwners {
 		args = append(args, scope.OwnerID)
@@ -213,7 +217,8 @@ func scanService(row scanner) (*domain.Service, error) {
 	)
 	if err := row.Scan(
 		&s.ID, &s.OwnerID, &s.Name, &pk, &s.Origins, &s.ExecuteURL, &s.StatusURL,
-		&rw, &fee, &lim, &status, &s.CreatedAt, &s.UpdatedAt,
+		&rw, &fee, &lim, &status, &s.CreatedAt, &s.UpdatedAt, &s.EncryptionPublicKey,
+		&s.Description, &s.IconURL, &s.MiniappURL,
 	); err != nil {
 		return nil, err
 	}

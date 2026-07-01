@@ -22,7 +22,7 @@ type Ledger interface {
 	// the platform wallet (fee).
 	Capture(ctx context.Context, req CaptureRequest) error
 	// Release returns held funds to the user's available balance (compensation).
-	Release(ctx context.Context, orderID string) error
+	Release(ctx context.Context, req ReleaseRequest) error
 }
 
 // FreezeRequest holds the inputs for a freeze. WalletID is the user's source
@@ -37,12 +37,23 @@ type FreezeRequest struct {
 // CaptureRequest splits the captured amount between the service and platform.
 type CaptureRequest struct {
 	OrderID string
+	// WalletID is the user's wallet whose held funds are captured (the source of
+	// the debit). The ledger credits the service and platform from it.
+	WalletID string
 	// Net is credited to the service's receiving wallet; Fee to the platform.
 	Net string
 	Fee string
 	// ReceivingWalletID is the service payout wallet for the order's currency.
 	ReceivingWalletID string
 	CurrencyID        int64
+}
+
+// ReleaseRequest returns a wallet's held funds for an order to available
+// (compensation). WalletID identifies whose held funds to return.
+type ReleaseRequest struct {
+	OrderID    string
+	WalletID   string
+	CurrencyID int64
 }
 
 // ExecuteStatus is the provider's verdict for an execute call.
@@ -83,26 +94,35 @@ type ExecuteRequest struct {
 
 // OrderStore persists orders and supports idempotency lookups. Transitions and
 // outbox writes happen in one DB transaction in the Postgres implementation.
+//
+// Every state change is also recorded as an append-only row in the order
+// transition trail, written in the same transaction as the order UPDATE so the
+// audit log can never diverge from the order's current state (white paper §8).
 type OrderStore interface {
-	// Create inserts a new order. Returns domain.ErrAlreadyExists if an order
+	// Create inserts a new order and records its genesis transition
+	// (nil from-state -> CREATED). Returns domain.ErrAlreadyExists if an order
 	// with the same id exists.
-	Create(ctx context.Context, o *domain.Order) error
+	Create(ctx context.Context, o *domain.Order, rec *domain.OrderTransition) error
 	// Get loads an order by id.
 	Get(ctx context.Context, id string) (*domain.Order, error)
 	// FindByNonce returns the order created for a quote nonce, or
 	// domain.ErrOrderNotFound if none — the basis of /pay idempotency.
 	FindByNonce(ctx context.Context, serviceID, nonce string) (*domain.Order, error)
-	// Save persists the order's current state (after a transition).
-	Save(ctx context.Context, o *domain.Order) error
-	// SaveWithOutbox persists the order's state AND appends an outbox entry in a
-	// single transaction. This is how capture/release are recorded: the order
-	// transition and the pending ledger op commit atomically, closing the
-	// "ledger applied but order not marked" gap (white paper section 11).
-	SaveWithOutbox(ctx context.Context, o *domain.Order, entry *domain.OutboxEntry) error
+	// Save persists the order's current state (after a transition) and appends
+	// the transition record, atomically.
+	Save(ctx context.Context, o *domain.Order, rec *domain.OrderTransition) error
+	// SaveWithOutbox persists the order's state, appends the transition record,
+	// AND appends an outbox entry in a single transaction. This is how
+	// capture/release are recorded: the order transition, its audit row, and the
+	// pending ledger op commit atomically, closing the "ledger applied but order
+	// not marked" gap (white paper section 11).
+	SaveWithOutbox(ctx context.Context, o *domain.Order, rec *domain.OrderTransition, entry *domain.OutboxEntry) error
 	// ListStuck returns orders in intermediate states whose freeze TTL elapsed
 	// before olderThan, up to limit. The reconciler drives these to a final
 	// state. EXECUTED (capture pending) and PENDING (awaiting webhook) qualify.
 	ListStuck(ctx context.Context, olderThan time.Time, limit int) ([]*domain.Order, error)
+	// ListTransitions returns an order's append-only audit trail in seq order.
+	ListTransitions(ctx context.Context, orderID string) ([]*domain.OrderTransition, error)
 }
 
 // OutboxStore is the dispatcher's view of the outbox: read undispatched entries

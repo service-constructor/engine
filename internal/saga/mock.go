@@ -37,10 +37,10 @@ func (m *MockLedger) Capture(_ context.Context, req CaptureRequest) error {
 	return nil
 }
 
-func (m *MockLedger) Release(_ context.Context, orderID string) error {
+func (m *MockLedger) Release(_ context.Context, req ReleaseRequest) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.released[orderID] = true
+	m.released[req.OrderID] = true
 	return nil
 }
 

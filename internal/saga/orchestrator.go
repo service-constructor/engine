@@ -39,6 +39,10 @@ type Orchestrator struct {
 	newID    IDGen
 	// freezeTTL bounds how long held funds may sit before reconciliation.
 	freezeTTL time.Duration
+	// requireConsent gates device-signed consent verification. It defaults to
+	// true; a trusted shell driving payment over an authenticated session (the
+	// personal cabinet) sets it false, treating the session as the authorization.
+	requireConsent bool
 }
 
 // Option configures an Orchestrator.
@@ -50,17 +54,23 @@ func WithFreezeTTL(d time.Duration) Option {
 	return func(o *Orchestrator) { o.freezeTTL = d }
 }
 
+// WithRequireConsent toggles device-signed consent verification on /pay.
+func WithRequireConsent(require bool) Option {
+	return func(o *Orchestrator) { o.requireConsent = require }
+}
+
 // New builds an Orchestrator.
 func New(services ServiceLookup, orders OrderStore, ledger Ledger, executor Executor, devices DeviceKeyResolver, opts ...Option) *Orchestrator {
 	o := &Orchestrator{
-		services:  services,
-		orders:    orders,
-		ledger:    ledger,
-		executor:  executor,
-		devices:   devices,
-		now:       time.Now,
-		newID:     defaultOrderID,
-		freezeTTL: 2 * time.Minute,
+		services:       services,
+		orders:         orders,
+		ledger:         ledger,
+		executor:       executor,
+		devices:        devices,
+		now:            time.Now,
+		newID:          defaultOrderID,
+		freezeTTL:      2 * time.Minute,
+		requireConsent: true,
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -112,7 +122,13 @@ func (o *Orchestrator) Pay(ctx context.Context, cmd PayCommand) (*domain.Order, 
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
-	if err := o.orders.Create(ctx, order); err != nil {
+	genesis := &domain.OrderTransition{
+		OrderID:   order.ID,
+		ToState:   domain.OrderCreated,
+		Reason:    "created",
+		CreatedAt: now,
+	}
+	if err := o.orders.Create(ctx, order, genesis); err != nil {
 		// A concurrent request may have created it first — fall back to it.
 		if existing, ferr := o.orders.FindByNonce(ctx, cmd.Quote.ServiceID, cmd.Quote.Nonce); ferr == nil {
 			return existing, nil
@@ -152,22 +168,26 @@ func (o *Orchestrator) validate(ctx context.Context, cmd PayCommand, svc *domain
 		return err
 	}
 
-	// Consent must bind to this exact quote and the selected wallet.
-	wantHash, err := QuoteHash(q)
-	if err != nil {
-		return err
-	}
-	if cmd.Consent.QuoteHash != wantHash || cmd.Consent.WalletID != cmd.SelectedWalletID {
-		return domain.ErrConsentMismatch
-	}
-
-	// Consent signature (device key).
-	devPEM, err := o.devices.DevicePublicKeyPEM(ctx, q.UserID, cmd.Consent.DeviceKid)
-	if err != nil {
-		return fmt.Errorf("%w: device key: %v", domain.ErrInvalidSignature, err)
-	}
-	if err := VerifyConsentSignature(cmd.Consent, devPEM); err != nil {
-		return err
+	// Consent verification is optional. When a trusted shell (e.g. the personal
+	// cabinet) drives payment over an authenticated session, the session itself is
+	// the user's authorization and no separate device-signed consent is required.
+	// When requireConsent is set, the device-signed consent must bind to this
+	// exact quote and wallet (white paper §7.3).
+	if o.requireConsent {
+		wantHash, err := QuoteHash(q)
+		if err != nil {
+			return err
+		}
+		if cmd.Consent.QuoteHash != wantHash || cmd.Consent.WalletID != cmd.SelectedWalletID {
+			return domain.ErrConsentMismatch
+		}
+		devPEM, err := o.devices.DevicePublicKeyPEM(ctx, q.UserID, cmd.Consent.DeviceKid)
+		if err != nil {
+			return fmt.Errorf("%w: device key: %v", domain.ErrInvalidSignature, err)
+		}
+		if err := VerifyConsentSignature(cmd.Consent, devPEM); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -203,15 +223,15 @@ func (o *Orchestrator) run(ctx context.Context, order *domain.Order, svc *domain
 		Amount:     order.Amount,
 		CurrencyID: order.CurrencyID,
 	}); err != nil {
-		_ = o.transition(ctx, order, domain.OrderRejected)
+		_ = o.transition(ctx, order, domain.OrderRejected, "freeze_failed")
 		return order, fmt.Errorf("freeze: %w", err)
 	}
-	if err := o.transition(ctx, order, domain.OrderFrozen); err != nil {
+	if err := o.transition(ctx, order, domain.OrderFrozen, "freeze_ok"); err != nil {
 		return order, err
 	}
 
 	// 2. Execute: call the provider.
-	if err := o.transition(ctx, order, domain.OrderExecuting); err != nil {
+	if err := o.transition(ctx, order, domain.OrderExecuting, "execute_start"); err != nil {
 		return order, err
 	}
 	res, err := o.executor.Execute(ctx, ExecuteRequest{
@@ -226,25 +246,25 @@ func (o *Orchestrator) run(ctx context.Context, order *domain.Order, svc *domain
 	})
 	if err != nil {
 		// Transport/unknown failure: treat as failed and compensate.
-		return o.fail(ctx, order)
+		return o.fail(ctx, order, "execute_error")
 	}
 
 	switch res.Status {
 	case ExecutePending:
 		// Async: park the order. The provider webhook (HandleCallback) or the
 		// reconciler finalizes it later.
-		_ = o.transition(ctx, order, domain.OrderPending)
+		_ = o.transition(ctx, order, domain.OrderPending, "execute_pending")
 		return order, nil
 	case ExecuteFailed:
-		return o.fail(ctx, order)
+		return o.fail(ctx, order, "execute_failed")
 	case ExecuteSuccess:
 		order.ExternalRef = res.ExternalRef
-		if err := o.transition(ctx, order, domain.OrderExecuted); err != nil {
+		if err := o.transition(ctx, order, domain.OrderExecuted, "execute_success"); err != nil {
 			return order, err
 		}
-		return o.capture(ctx, order, svc)
+		return o.capture(ctx, order, svc, "capture")
 	default:
-		return o.fail(ctx, order)
+		return o.fail(ctx, order, "execute_unknown")
 	}
 }
 
@@ -253,57 +273,82 @@ func (o *Orchestrator) run(ctx context.Context, order *domain.Order, svc *domain
 // later by the dispatcher, idempotently. Because the order is only marked
 // COMPLETED if the outbox row also commits, money and order state cannot
 // desynchronize (white paper section 11).
-func (o *Orchestrator) capture(ctx context.Context, order *domain.Order, svc *domain.Service) (*domain.Order, error) {
+func (o *Orchestrator) capture(ctx context.Context, order *domain.Order, svc *domain.Service, reason string) (*domain.Order, error) {
 	entry := &domain.OutboxEntry{
 		OrderID: order.ID,
 		Op:      domain.OutboxCapture,
 		Payload: map[string]any{
+			"walletId":          order.WalletID,
 			"net":               order.Net,
 			"fee":               order.Fee,
 			"receivingWalletId": receivingWalletFor(svc, order.CurrencyID),
 			"currencyId":        order.CurrencyID,
 		},
 	}
-	if err := o.transitionWithOutbox(ctx, order, domain.OrderCompleted, entry); err != nil {
+	if err := o.transitionWithOutbox(ctx, order, domain.OrderCompleted, reason, entry); err != nil {
 		return order, err
 	}
 	return order, nil
 }
 
 // fail compensates a frozen order: it moves to FAILED, then to RELEASED with a
-// release outbox entry committed atomically.
-func (o *Orchestrator) fail(ctx context.Context, order *domain.Order) (*domain.Order, error) {
-	if err := o.transition(ctx, order, domain.OrderFailed); err != nil {
+// release outbox entry committed atomically. reason tags why the order failed
+// (transport error, provider FAILED, reconcile) in the audit trail.
+func (o *Orchestrator) fail(ctx context.Context, order *domain.Order, reason string) (*domain.Order, error) {
+	if err := o.transition(ctx, order, domain.OrderFailed, reason); err != nil {
 		return order, err
 	}
 	entry := &domain.OutboxEntry{
 		OrderID: order.ID,
 		Op:      domain.OutboxRelease,
-		Payload: map[string]any{},
+		Payload: map[string]any{
+			"walletId":   order.WalletID,
+			"currencyId": order.CurrencyID,
+		},
 	}
-	if err := o.transitionWithOutbox(ctx, order, domain.OrderReleased, entry); err != nil {
+	if err := o.transitionWithOutbox(ctx, order, domain.OrderReleased, "release", entry); err != nil {
 		return order, err
 	}
 	return order, nil
 }
 
-// transition applies a state change and persists it.
-func (o *Orchestrator) transition(ctx context.Context, order *domain.Order, next domain.OrderState) error {
-	if err := order.Transition(next); err != nil {
+// transition applies a state change and persists it, recording the edge in the
+// append-only order_transitions trail in the same operation.
+func (o *Orchestrator) transition(ctx context.Context, order *domain.Order, next domain.OrderState, reason string) error {
+	rec, err := o.applyTransition(order, next, reason)
+	if err != nil {
 		return err
 	}
-	order.UpdatedAt = o.now().UTC()
-	return o.orders.Save(ctx, order)
+	return o.orders.Save(ctx, order, rec)
 }
 
-// transitionWithOutbox applies a state change and appends an outbox entry in one
-// transaction.
-func (o *Orchestrator) transitionWithOutbox(ctx context.Context, order *domain.Order, next domain.OrderState, entry *domain.OutboxEntry) error {
-	if err := order.Transition(next); err != nil {
+// transitionWithOutbox applies a state change, records the transition, and
+// appends an outbox entry — all in one transaction.
+func (o *Orchestrator) transitionWithOutbox(ctx context.Context, order *domain.Order, next domain.OrderState, reason string, entry *domain.OutboxEntry) error {
+	rec, err := o.applyTransition(order, next, reason)
+	if err != nil {
 		return err
 	}
-	order.UpdatedAt = o.now().UTC()
-	return o.orders.SaveWithOutbox(ctx, order, entry)
+	return o.orders.SaveWithOutbox(ctx, order, rec, entry)
+}
+
+// applyTransition validates and applies the edge in memory and builds the audit
+// record, snapshotting the from-state before it is overwritten. The store
+// assigns Seq atomically at insert time, so it is left zero here.
+func (o *Orchestrator) applyTransition(order *domain.Order, next domain.OrderState, reason string) (*domain.OrderTransition, error) {
+	from := order.State
+	if err := order.Transition(next); err != nil {
+		return nil, err
+	}
+	now := o.now().UTC()
+	order.UpdatedAt = now
+	return &domain.OrderTransition{
+		OrderID:   order.ID,
+		FromState: from,
+		ToState:   next,
+		Reason:    reason,
+		CreatedAt: now,
+	}, nil
 }
 
 // ProcessCallback verifies a signed provider webhook and finalizes the order.
@@ -331,7 +376,7 @@ func (o *Orchestrator) ProcessCallback(ctx context.Context, cb Callback) (*domai
 	if cb.ExternalRef != "" {
 		order.ExternalRef = cb.ExternalRef
 	}
-	return o.finalize(ctx, order, svc, cb.Success())
+	return o.finalize(ctx, order, svc, cb.Success(), "webhook")
 }
 
 // ReconcileOrder drives a single stuck order toward a final state, applying
@@ -355,7 +400,7 @@ func (o *Orchestrator) ReconcileOrder(ctx context.Context, status StatusChecker,
 	switch order.State {
 	case domain.OrderExecuted:
 		// Service confirmed; only the capture is missing. Retry it.
-		return o.capture(ctx, order, svc)
+		return o.capture(ctx, order, svc, "reconcile_capture")
 
 	case domain.OrderPending:
 		st, err := status.CheckStatus(ctx, svc.StatusURL, order.ID)
@@ -364,9 +409,9 @@ func (o *Orchestrator) ReconcileOrder(ctx context.Context, status StatusChecker,
 		}
 		switch st {
 		case ProviderDone:
-			return o.finalize(ctx, order, svc, true)
+			return o.finalize(ctx, order, svc, true, "reconcile")
 		case ProviderNotDone:
-			return o.finalize(ctx, order, svc, false)
+			return o.finalize(ctx, order, svc, false, "reconcile")
 		default:
 			// UNKNOWN: do not compensate. Leave for a later pass / operator.
 			return order, nil
@@ -381,12 +426,12 @@ func (o *Orchestrator) ReconcileOrder(ctx context.Context, status StatusChecker,
 
 // finalize drives a PENDING order to its terminal state: success captures and
 // completes; failure releases held funds. Shared by the webhook and reconciler.
-func (o *Orchestrator) finalize(ctx context.Context, order *domain.Order, svc *domain.Service, success bool) (*domain.Order, error) {
+func (o *Orchestrator) finalize(ctx context.Context, order *domain.Order, svc *domain.Service, success bool, reason string) (*domain.Order, error) {
 	if !success {
-		return o.fail(ctx, order)
+		return o.fail(ctx, order, reason+"_notdone")
 	}
-	if err := o.transition(ctx, order, domain.OrderExecuted); err != nil {
+	if err := o.transition(ctx, order, domain.OrderExecuted, reason+"_done"); err != nil {
 		return order, err
 	}
-	return o.capture(ctx, order, svc)
+	return o.capture(ctx, order, svc, reason+"_capture")
 }

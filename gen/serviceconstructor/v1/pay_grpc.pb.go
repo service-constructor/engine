@@ -19,9 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PaymentService_Pay_FullMethodName      = "/serviceconstructor.v1.PaymentService/Pay"
-	PaymentService_GetOrder_FullMethodName = "/serviceconstructor.v1.PaymentService/GetOrder"
-	PaymentService_Callback_FullMethodName = "/serviceconstructor.v1.PaymentService/Callback"
+	PaymentService_Pay_FullMethodName             = "/serviceconstructor.v1.PaymentService/Pay"
+	PaymentService_GetOrder_FullMethodName        = "/serviceconstructor.v1.PaymentService/GetOrder"
+	PaymentService_GetServiceInfo_FullMethodName  = "/serviceconstructor.v1.PaymentService/GetServiceInfo"
+	PaymentService_ListServiceInfo_FullMethodName = "/serviceconstructor.v1.PaymentService/ListServiceInfo"
+	PaymentService_Callback_FullMethodName        = "/serviceconstructor.v1.PaymentService/Callback"
 )
 
 // PaymentServiceClient is the client API for PaymentService service.
@@ -36,6 +38,14 @@ type PaymentServiceClient interface {
 	Pay(ctx context.Context, in *PayRequest, opts ...grpc.CallOption) (*Order, error)
 	// GetOrder returns the current state of an order.
 	GetOrder(ctx context.Context, in *GetOrderRequest, opts ...grpc.CallOption) (*Order, error)
+	// GetServiceInfo returns a service's public, non-sensitive info (name, origins,
+	// encryption public key) so a shell can open the service. It is unscoped (any
+	// authenticated user may open any service) and returns no secrets.
+	GetServiceInfo(ctx context.Context, in *GetServiceInfoRequest, opts ...grpc.CallOption) (*ServiceInfo, error)
+	// ListServiceInfo returns the public catalog of ACTIVE services so a shell
+	// (personal cabinet) can render its app list. Unscoped (any authenticated
+	// user) and returns no secrets — only the public ServiceInfo view.
+	ListServiceInfo(ctx context.Context, in *ListServiceInfoRequest, opts ...grpc.CallOption) (*ListServiceInfoResponse, error)
 	// Callback finalizes an async (PENDING) order. The provider posts the final
 	// status signed with its private key; the platform verifies it against the
 	// service public key. Idempotent by orderId. No user auth: authentication is
@@ -71,6 +81,26 @@ func (c *paymentServiceClient) GetOrder(ctx context.Context, in *GetOrderRequest
 	return out, nil
 }
 
+func (c *paymentServiceClient) GetServiceInfo(ctx context.Context, in *GetServiceInfoRequest, opts ...grpc.CallOption) (*ServiceInfo, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ServiceInfo)
+	err := c.cc.Invoke(ctx, PaymentService_GetServiceInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentServiceClient) ListServiceInfo(ctx context.Context, in *ListServiceInfoRequest, opts ...grpc.CallOption) (*ListServiceInfoResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListServiceInfoResponse)
+	err := c.cc.Invoke(ctx, PaymentService_ListServiceInfo_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *paymentServiceClient) Callback(ctx context.Context, in *CallbackRequest, opts ...grpc.CallOption) (*Order, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Order)
@@ -93,6 +123,14 @@ type PaymentServiceServer interface {
 	Pay(context.Context, *PayRequest) (*Order, error)
 	// GetOrder returns the current state of an order.
 	GetOrder(context.Context, *GetOrderRequest) (*Order, error)
+	// GetServiceInfo returns a service's public, non-sensitive info (name, origins,
+	// encryption public key) so a shell can open the service. It is unscoped (any
+	// authenticated user may open any service) and returns no secrets.
+	GetServiceInfo(context.Context, *GetServiceInfoRequest) (*ServiceInfo, error)
+	// ListServiceInfo returns the public catalog of ACTIVE services so a shell
+	// (personal cabinet) can render its app list. Unscoped (any authenticated
+	// user) and returns no secrets — only the public ServiceInfo view.
+	ListServiceInfo(context.Context, *ListServiceInfoRequest) (*ListServiceInfoResponse, error)
 	// Callback finalizes an async (PENDING) order. The provider posts the final
 	// status signed with its private key; the platform verifies it against the
 	// service public key. Idempotent by orderId. No user auth: authentication is
@@ -113,6 +151,12 @@ func (UnimplementedPaymentServiceServer) Pay(context.Context, *PayRequest) (*Ord
 }
 func (UnimplementedPaymentServiceServer) GetOrder(context.Context, *GetOrderRequest) (*Order, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetOrder not implemented")
+}
+func (UnimplementedPaymentServiceServer) GetServiceInfo(context.Context, *GetServiceInfoRequest) (*ServiceInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetServiceInfo not implemented")
+}
+func (UnimplementedPaymentServiceServer) ListServiceInfo(context.Context, *ListServiceInfoRequest) (*ListServiceInfoResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListServiceInfo not implemented")
 }
 func (UnimplementedPaymentServiceServer) Callback(context.Context, *CallbackRequest) (*Order, error) {
 	return nil, status.Error(codes.Unimplemented, "method Callback not implemented")
@@ -174,6 +218,42 @@ func _PaymentService_GetOrder_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PaymentService_GetServiceInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetServiceInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).GetServiceInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_GetServiceInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).GetServiceInfo(ctx, req.(*GetServiceInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentService_ListServiceInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListServiceInfoRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).ListServiceInfo(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_ListServiceInfo_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).ListServiceInfo(ctx, req.(*ListServiceInfoRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PaymentService_Callback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CallbackRequest)
 	if err := dec(in); err != nil {
@@ -206,6 +286,14 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetOrder",
 			Handler:    _PaymentService_GetOrder_Handler,
+		},
+		{
+			MethodName: "GetServiceInfo",
+			Handler:    _PaymentService_GetServiceInfo_Handler,
+		},
+		{
+			MethodName: "ListServiceInfo",
+			Handler:    _PaymentService_ListServiceInfo_Handler,
 		},
 		{
 			MethodName: "Callback",

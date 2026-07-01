@@ -94,6 +94,226 @@ func (OrderState) EnumDescriptor() ([]byte, []int) {
 	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{0}
 }
 
+type GetServiceInfoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ServiceId     string                 `protobuf:"bytes,1,opt,name=service_id,json=serviceId,proto3" json:"service_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetServiceInfoRequest) Reset() {
+	*x = GetServiceInfoRequest{}
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetServiceInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetServiceInfoRequest) ProtoMessage() {}
+
+func (x *GetServiceInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetServiceInfoRequest.ProtoReflect.Descriptor instead.
+func (*GetServiceInfoRequest) Descriptor() ([]byte, []int) {
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *GetServiceInfoRequest) GetServiceId() string {
+	if x != nil {
+		return x.ServiceId
+	}
+	return ""
+}
+
+type ListServiceInfoRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListServiceInfoRequest) Reset() {
+	*x = ListServiceInfoRequest{}
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListServiceInfoRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListServiceInfoRequest) ProtoMessage() {}
+
+func (x *ListServiceInfoRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListServiceInfoRequest.ProtoReflect.Descriptor instead.
+func (*ListServiceInfoRequest) Descriptor() ([]byte, []int) {
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{1}
+}
+
+type ListServiceInfoResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Services      []*ServiceInfo         `protobuf:"bytes,1,rep,name=services,proto3" json:"services,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListServiceInfoResponse) Reset() {
+	*x = ListServiceInfoResponse{}
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListServiceInfoResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListServiceInfoResponse) ProtoMessage() {}
+
+func (x *ListServiceInfoResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListServiceInfoResponse.ProtoReflect.Descriptor instead.
+func (*ListServiceInfoResponse) Descriptor() ([]byte, []int) {
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ListServiceInfoResponse) GetServices() []*ServiceInfo {
+	if x != nil {
+		return x.Services
+	}
+	return nil
+}
+
+// ServiceInfo is the public view of a service — safe to expose to any shell.
+type ServiceInfo struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ServiceId string                 `protobuf:"bytes,1,opt,name=service_id,json=serviceId,proto3" json:"service_id,omitempty"`
+	Name      string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Origins   []string               `protobuf:"bytes,3,rep,name=origins,proto3" json:"origins,omitempty"`
+	// encryption_public_key is the service's X25519 public key (base64 raw) the
+	// shell uses to sealed-box encrypt the user id it hands the mini-app.
+	EncryptionPublicKey string `protobuf:"bytes,4,opt,name=encryption_public_key,json=encryptionPublicKey,proto3" json:"encryption_public_key,omitempty"`
+	// --- storefront display fields (mirror of Service catalog fields) ---
+	Description   string `protobuf:"bytes,5,opt,name=description,proto3" json:"description,omitempty"`
+	IconUrl       string `protobuf:"bytes,6,opt,name=icon_url,json=iconUrl,proto3" json:"icon_url,omitempty"`
+	MiniappUrl    string `protobuf:"bytes,7,opt,name=miniapp_url,json=miniappUrl,proto3" json:"miniapp_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ServiceInfo) Reset() {
+	*x = ServiceInfo{}
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ServiceInfo) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ServiceInfo) ProtoMessage() {}
+
+func (x *ServiceInfo) ProtoReflect() protoreflect.Message {
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ServiceInfo.ProtoReflect.Descriptor instead.
+func (*ServiceInfo) Descriptor() ([]byte, []int) {
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ServiceInfo) GetServiceId() string {
+	if x != nil {
+		return x.ServiceId
+	}
+	return ""
+}
+
+func (x *ServiceInfo) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ServiceInfo) GetOrigins() []string {
+	if x != nil {
+		return x.Origins
+	}
+	return nil
+}
+
+func (x *ServiceInfo) GetEncryptionPublicKey() string {
+	if x != nil {
+		return x.EncryptionPublicKey
+	}
+	return ""
+}
+
+func (x *ServiceInfo) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *ServiceInfo) GetIconUrl() string {
+	if x != nil {
+		return x.IconUrl
+	}
+	return ""
+}
+
+func (x *ServiceInfo) GetMiniappUrl() string {
+	if x != nil {
+		return x.MiniappUrl
+	}
+	return ""
+}
+
 // Quote is the signed payment instruction issued by a service. The platform
 // verifies its signature against the service public key in the registry.
 type Quote struct {
@@ -118,7 +338,7 @@ type Quote struct {
 
 func (x *Quote) Reset() {
 	*x = Quote{}
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[0]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -130,7 +350,7 @@ func (x *Quote) String() string {
 func (*Quote) ProtoMessage() {}
 
 func (x *Quote) ProtoReflect() protoreflect.Message {
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[0]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -143,7 +363,7 @@ func (x *Quote) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Quote.ProtoReflect.Descriptor instead.
 func (*Quote) Descriptor() ([]byte, []int) {
-	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{0}
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Quote) GetVersion() int32 {
@@ -245,7 +465,7 @@ type Consent struct {
 
 func (x *Consent) Reset() {
 	*x = Consent{}
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[1]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -257,7 +477,7 @@ func (x *Consent) String() string {
 func (*Consent) ProtoMessage() {}
 
 func (x *Consent) ProtoReflect() protoreflect.Message {
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[1]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -270,7 +490,7 @@ func (x *Consent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Consent.ProtoReflect.Descriptor instead.
 func (*Consent) Descriptor() ([]byte, []int) {
-	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{1}
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Consent) GetQuoteHash() string {
@@ -330,7 +550,7 @@ type PayRequest struct {
 
 func (x *PayRequest) Reset() {
 	*x = PayRequest{}
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[2]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -342,7 +562,7 @@ func (x *PayRequest) String() string {
 func (*PayRequest) ProtoMessage() {}
 
 func (x *PayRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[2]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -355,7 +575,7 @@ func (x *PayRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PayRequest.ProtoReflect.Descriptor instead.
 func (*PayRequest) Descriptor() ([]byte, []int) {
-	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{2}
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *PayRequest) GetQuote() *Quote {
@@ -406,7 +626,7 @@ type Order struct {
 
 func (x *Order) Reset() {
 	*x = Order{}
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[3]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -418,7 +638,7 @@ func (x *Order) String() string {
 func (*Order) ProtoMessage() {}
 
 func (x *Order) ProtoReflect() protoreflect.Message {
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[3]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -431,7 +651,7 @@ func (x *Order) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Order.ProtoReflect.Descriptor instead.
 func (*Order) Descriptor() ([]byte, []int) {
-	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{3}
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Order) GetOrderId() string {
@@ -528,7 +748,7 @@ type GetOrderRequest struct {
 
 func (x *GetOrderRequest) Reset() {
 	*x = GetOrderRequest{}
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[4]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -540,7 +760,7 @@ func (x *GetOrderRequest) String() string {
 func (*GetOrderRequest) ProtoMessage() {}
 
 func (x *GetOrderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[4]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -553,7 +773,7 @@ func (x *GetOrderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOrderRequest.ProtoReflect.Descriptor instead.
 func (*GetOrderRequest) Descriptor() ([]byte, []int) {
-	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{4}
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *GetOrderRequest) GetServiceId() string {
@@ -586,7 +806,7 @@ type CallbackRequest struct {
 
 func (x *CallbackRequest) Reset() {
 	*x = CallbackRequest{}
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[5]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -598,7 +818,7 @@ func (x *CallbackRequest) String() string {
 func (*CallbackRequest) ProtoMessage() {}
 
 func (x *CallbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[5]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -611,7 +831,7 @@ func (x *CallbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallbackRequest.ProtoReflect.Descriptor instead.
 func (*CallbackRequest) Descriptor() ([]byte, []int) {
-	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{5}
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *CallbackRequest) GetOrderId() string {
@@ -653,7 +873,23 @@ var File_serviceconstructor_v1_pay_proto protoreflect.FileDescriptor
 
 const file_serviceconstructor_v1_pay_proto_rawDesc = "" +
 	"\n" +
-	"\x1fserviceconstructor/v1/pay.proto\x12\x15serviceconstructor.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xb9\x03\n" +
+	"\x1fserviceconstructor/v1/pay.proto\x12\x15serviceconstructor.v1\x1a\x1cgoogle/api/annotations.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"6\n" +
+	"\x15GetServiceInfoRequest\x12\x1d\n" +
+	"\n" +
+	"service_id\x18\x01 \x01(\tR\tserviceId\"\x18\n" +
+	"\x16ListServiceInfoRequest\"Y\n" +
+	"\x17ListServiceInfoResponse\x12>\n" +
+	"\bservices\x18\x01 \x03(\v2\".serviceconstructor.v1.ServiceInfoR\bservices\"\xec\x01\n" +
+	"\vServiceInfo\x12\x1d\n" +
+	"\n" +
+	"service_id\x18\x01 \x01(\tR\tserviceId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x18\n" +
+	"\aorigins\x18\x03 \x03(\tR\aorigins\x122\n" +
+	"\x15encryption_public_key\x18\x04 \x01(\tR\x13encryptionPublicKey\x12 \n" +
+	"\vdescription\x18\x05 \x01(\tR\vdescription\x12\x19\n" +
+	"\bicon_url\x18\x06 \x01(\tR\aiconUrl\x12\x1f\n" +
+	"\vminiapp_url\x18\a \x01(\tR\n" +
+	"miniappUrl\"\xb9\x03\n" +
 	"\x05Quote\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\x05R\aversion\x12\x1d\n" +
 	"\n" +
@@ -727,10 +963,12 @@ const file_serviceconstructor_v1_pay_proto_rawDesc = "" +
 	"\x15ORDER_STATE_COMPLETED\x10\x06\x12\x18\n" +
 	"\x14ORDER_STATE_REJECTED\x10\a\x12\x16\n" +
 	"\x12ORDER_STATE_FAILED\x10\b\x12\x18\n" +
-	"\x14ORDER_STATE_RELEASED\x10\t2\xf1\x02\n" +
+	"\x14ORDER_STATE_RELEASED\x10\t2\x87\x05\n" +
 	"\x0ePaymentService\x12c\n" +
 	"\x03Pay\x12!.serviceconstructor.v1.PayRequest\x1a\x1c.serviceconstructor.v1.Order\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/v1/services/pay\x12\x85\x01\n" +
-	"\bGetOrder\x12&.serviceconstructor.v1.GetOrderRequest\x1a\x1c.serviceconstructor.v1.Order\"3\x82\xd3\xe4\x93\x02-\x12+/v1/services/{service_id}/orders/{order_id}\x12r\n" +
+	"\bGetOrder\x12&.serviceconstructor.v1.GetOrderRequest\x1a\x1c.serviceconstructor.v1.Order\"3\x82\xd3\xe4\x93\x02-\x12+/v1/services/{service_id}/orders/{order_id}\x12\x8a\x01\n" +
+	"\x0eGetServiceInfo\x12,.serviceconstructor.v1.GetServiceInfoRequest\x1a\".serviceconstructor.v1.ServiceInfo\"&\x82\xd3\xe4\x93\x02 \x12\x1e/v1/services/{service_id}/info\x12\x86\x01\n" +
+	"\x0fListServiceInfo\x12-.serviceconstructor.v1.ListServiceInfoRequest\x1a..serviceconstructor.v1.ListServiceInfoResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/services\x12r\n" +
 	"\bCallback\x12&.serviceconstructor.v1.CallbackRequest\x1a\x1c.serviceconstructor.v1.Order\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/services/callbackBFZDgithub.com/nvsces/service-constructor/gen/serviceconstructor/v1;scv1b\x06proto3"
 
 var (
@@ -746,36 +984,45 @@ func file_serviceconstructor_v1_pay_proto_rawDescGZIP() []byte {
 }
 
 var file_serviceconstructor_v1_pay_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_serviceconstructor_v1_pay_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_serviceconstructor_v1_pay_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_serviceconstructor_v1_pay_proto_goTypes = []any{
-	(OrderState)(0),               // 0: serviceconstructor.v1.OrderState
-	(*Quote)(nil),                 // 1: serviceconstructor.v1.Quote
-	(*Consent)(nil),               // 2: serviceconstructor.v1.Consent
-	(*PayRequest)(nil),            // 3: serviceconstructor.v1.PayRequest
-	(*Order)(nil),                 // 4: serviceconstructor.v1.Order
-	(*GetOrderRequest)(nil),       // 5: serviceconstructor.v1.GetOrderRequest
-	(*CallbackRequest)(nil),       // 6: serviceconstructor.v1.CallbackRequest
-	nil,                           // 7: serviceconstructor.v1.Quote.MetadataEntry
-	(*timestamppb.Timestamp)(nil), // 8: google.protobuf.Timestamp
+	(OrderState)(0),                 // 0: serviceconstructor.v1.OrderState
+	(*GetServiceInfoRequest)(nil),   // 1: serviceconstructor.v1.GetServiceInfoRequest
+	(*ListServiceInfoRequest)(nil),  // 2: serviceconstructor.v1.ListServiceInfoRequest
+	(*ListServiceInfoResponse)(nil), // 3: serviceconstructor.v1.ListServiceInfoResponse
+	(*ServiceInfo)(nil),             // 4: serviceconstructor.v1.ServiceInfo
+	(*Quote)(nil),                   // 5: serviceconstructor.v1.Quote
+	(*Consent)(nil),                 // 6: serviceconstructor.v1.Consent
+	(*PayRequest)(nil),              // 7: serviceconstructor.v1.PayRequest
+	(*Order)(nil),                   // 8: serviceconstructor.v1.Order
+	(*GetOrderRequest)(nil),         // 9: serviceconstructor.v1.GetOrderRequest
+	(*CallbackRequest)(nil),         // 10: serviceconstructor.v1.CallbackRequest
+	nil,                             // 11: serviceconstructor.v1.Quote.MetadataEntry
+	(*timestamppb.Timestamp)(nil),   // 12: google.protobuf.Timestamp
 }
 var file_serviceconstructor_v1_pay_proto_depIdxs = []int32{
-	7, // 0: serviceconstructor.v1.Quote.metadata:type_name -> serviceconstructor.v1.Quote.MetadataEntry
-	1, // 1: serviceconstructor.v1.PayRequest.quote:type_name -> serviceconstructor.v1.Quote
-	2, // 2: serviceconstructor.v1.PayRequest.consent:type_name -> serviceconstructor.v1.Consent
-	0, // 3: serviceconstructor.v1.Order.state:type_name -> serviceconstructor.v1.OrderState
-	8, // 4: serviceconstructor.v1.Order.created_at:type_name -> google.protobuf.Timestamp
-	8, // 5: serviceconstructor.v1.Order.updated_at:type_name -> google.protobuf.Timestamp
-	3, // 6: serviceconstructor.v1.PaymentService.Pay:input_type -> serviceconstructor.v1.PayRequest
-	5, // 7: serviceconstructor.v1.PaymentService.GetOrder:input_type -> serviceconstructor.v1.GetOrderRequest
-	6, // 8: serviceconstructor.v1.PaymentService.Callback:input_type -> serviceconstructor.v1.CallbackRequest
-	4, // 9: serviceconstructor.v1.PaymentService.Pay:output_type -> serviceconstructor.v1.Order
-	4, // 10: serviceconstructor.v1.PaymentService.GetOrder:output_type -> serviceconstructor.v1.Order
-	4, // 11: serviceconstructor.v1.PaymentService.Callback:output_type -> serviceconstructor.v1.Order
-	9, // [9:12] is the sub-list for method output_type
-	6, // [6:9] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	4,  // 0: serviceconstructor.v1.ListServiceInfoResponse.services:type_name -> serviceconstructor.v1.ServiceInfo
+	11, // 1: serviceconstructor.v1.Quote.metadata:type_name -> serviceconstructor.v1.Quote.MetadataEntry
+	5,  // 2: serviceconstructor.v1.PayRequest.quote:type_name -> serviceconstructor.v1.Quote
+	6,  // 3: serviceconstructor.v1.PayRequest.consent:type_name -> serviceconstructor.v1.Consent
+	0,  // 4: serviceconstructor.v1.Order.state:type_name -> serviceconstructor.v1.OrderState
+	12, // 5: serviceconstructor.v1.Order.created_at:type_name -> google.protobuf.Timestamp
+	12, // 6: serviceconstructor.v1.Order.updated_at:type_name -> google.protobuf.Timestamp
+	7,  // 7: serviceconstructor.v1.PaymentService.Pay:input_type -> serviceconstructor.v1.PayRequest
+	9,  // 8: serviceconstructor.v1.PaymentService.GetOrder:input_type -> serviceconstructor.v1.GetOrderRequest
+	1,  // 9: serviceconstructor.v1.PaymentService.GetServiceInfo:input_type -> serviceconstructor.v1.GetServiceInfoRequest
+	2,  // 10: serviceconstructor.v1.PaymentService.ListServiceInfo:input_type -> serviceconstructor.v1.ListServiceInfoRequest
+	10, // 11: serviceconstructor.v1.PaymentService.Callback:input_type -> serviceconstructor.v1.CallbackRequest
+	8,  // 12: serviceconstructor.v1.PaymentService.Pay:output_type -> serviceconstructor.v1.Order
+	8,  // 13: serviceconstructor.v1.PaymentService.GetOrder:output_type -> serviceconstructor.v1.Order
+	4,  // 14: serviceconstructor.v1.PaymentService.GetServiceInfo:output_type -> serviceconstructor.v1.ServiceInfo
+	3,  // 15: serviceconstructor.v1.PaymentService.ListServiceInfo:output_type -> serviceconstructor.v1.ListServiceInfoResponse
+	8,  // 16: serviceconstructor.v1.PaymentService.Callback:output_type -> serviceconstructor.v1.Order
+	12, // [12:17] is the sub-list for method output_type
+	7,  // [7:12] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_serviceconstructor_v1_pay_proto_init() }
@@ -789,7 +1036,7 @@ func file_serviceconstructor_v1_pay_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_serviceconstructor_v1_pay_proto_rawDesc), len(file_serviceconstructor_v1_pay_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   7,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

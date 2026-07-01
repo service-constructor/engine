@@ -142,6 +142,21 @@ message Service {
   // Lifecycle status.
   ServiceStatus status = 10;
 
+  // encryption_public_key is the service's X25519 public key (base64 raw, 32
+  // bytes) used to encrypt the user id the shell hands the mini-app. Unlike
+  // public_keys (Ed25519, for verifying signatures), this key is for anonymous
+  // sealed-box encryption; only the service can decrypt with its private key.
+  string encryption_public_key = 14;
+
+  // --- Storefront / catalog display fields (public, non-sensitive) ---
+  // description is a short human-readable blurb shown in the shell's app list.
+  string description = 15;
+  // icon_url is an emoji or image URL shown as the app's icon in the shell.
+  string icon_url = 16;
+  // miniapp_url is the web-app URL the shell loads in the WebView when the
+  // user opens this service.
+  string miniapp_url = 17;
+
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
 }

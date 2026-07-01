@@ -62,18 +62,27 @@ type Service struct {
 	// OwnerID is the subject (account) that owns this service. Set from the
 	// authenticated principal at creation; used to scope reads and writes so
 	// each account only sees its own services (super-admins see all).
-	OwnerID          string
-	Name             string
-	PublicKeys       []PublicKey
-	Origins          []string
-	ExecuteURL       string
-	StatusURL        string
-	ReceivingWallets []ReceivingWallet
-	Fee              Fee
-	Limits           Limits
-	Status           Status
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	OwnerID    string
+	Name       string
+	PublicKeys []PublicKey
+	// EncryptionPublicKey is the service's X25519 public key (base64 raw, 32
+	// bytes) used to sealed-box encrypt the user id handed to the mini-app. It is
+	// distinct from PublicKeys (Ed25519 signature keys).
+	EncryptionPublicKey string
+	Origins             []string
+	ExecuteURL          string
+	StatusURL           string
+	ReceivingWallets    []ReceivingWallet
+	Fee                 Fee
+	Limits              Limits
+	Status              Status
+	// Storefront/catalog display fields (public, non-sensitive): shown by the
+	// shell's app list.
+	Description string
+	IconURL     string
+	MiniappURL  string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // Validation errors surfaced by the service layer. They are sentinel values so
