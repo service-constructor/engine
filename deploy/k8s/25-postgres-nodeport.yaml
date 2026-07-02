@@ -1,0 +1,20 @@
+# External access to Postgres via a NodePort on 30433.
+#
+# WARNING: this exposes the database on the node's public IP
+# (85.237.36.177:30433). Access is protected only by the Postgres password.
+# Keep the password strong and rotate it if it leaks. Delete this Service to
+# close external access:  kubectl -n serviceconstructor delete svc postgres-external
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-external
+  namespace: serviceconstructor
+spec:
+  type: NodePort
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      nodePort: 30433
