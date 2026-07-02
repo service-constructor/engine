@@ -1,0 +1,237 @@
+# telegram-stars: Go service backend + Python Fragment sidecar + mini-app SPA.
+#   telegram-stars-service.serviceconstructor.dev  -> Go backend (quote/execute/packages)
+#   telegram-stars-miniapp.serviceconstructor.dev  -> SPA (proxies /service -> backend)
+#
+# The service sells Telegram Stars, priced/paid in GRAM (currency_id 2), captured
+# to wlt_stars_recv_gram. Delivery is delegated to the fragment-sidecar (Python),
+# which is the only component that talks to fragment.com. The sidecar runs in
+# mock mode here (FRAGMENT_MODE=mock) — no real Stars are purchased until the real
+# Fragment credentials (wallet seed + cookies) are provided and FRAGMENT_MODE=real.
+#
+# SERVICE_ID is the id assigned when "Telegram Stars" was registered via the admin
+# API. The signing (Ed25519) + encryption (X25519) keypairs are held in the
+# telegram-stars-service-keys Secret and their public halves are registered on the
+# platform.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fragment-sidecar
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fragment-sidecar
+  template:
+    metadata:
+      labels:
+        app: fragment-sidecar
+    spec:
+      containers:
+        - name: fragment-sidecar
+          image: serviceconstructor-fragment-sidecar:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4310
+              name: http
+          env:
+            - name: PORT
+              value: "4310"
+            # mock: price from STARS_GRAM_RATE, deliver synthetically. Switch to
+            # "real" only with the Fragment secret (seed + cookies) present.
+            - name: FRAGMENT_MODE
+              value: "mock"
+            - name: STARS_GRAM_RATE
+              value: "0.01"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 4310
+            initialDelaySeconds: 3
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fragment-sidecar
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: fragment-sidecar
+  ports:
+    - name: http
+      port: 4310
+      targetPort: 4310
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telegram-stars-service
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telegram-stars-service
+  template:
+    metadata:
+      labels:
+        app: telegram-stars-service
+    spec:
+      containers:
+        - name: telegram-stars-service
+          image: serviceconstructor-telegram-stars-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 4300
+              name: http
+          env:
+            - name: PORT
+              value: "4300"
+            - name: SERVICE_ID
+              value: "svc_42ec0f720bf74a078d78106ad5ccfa1b"
+            - name: SERVICE_KID
+              value: "stars-svc-key-1"
+            - name: PLATFORM_BASE_URL
+              value: "http://gateway:8080"
+            # Fulfillment via the Fragment sidecar.
+            - name: PROVIDER
+              value: "fragment"
+            - name: FRAGMENT_SIDECAR_URL
+              value: "http://fragment-sidecar:4310"
+            # Signing (Ed25519) + encryption (X25519) private keys, held in a
+            # Secret so the read-only distroless container never writes to disk.
+            # Secret created with:
+            #   kubectl -n serviceconstructor create secret generic telegram-stars-service-keys \
+            #     --from-file=PRIVATE_KEY_PEM=/tmp/stars_sign.pem \
+            #     --from-literal=ENC_PRIVATE_KEY_B64=$(cat /tmp/stars_enc_priv.b64)
+            - name: PRIVATE_KEY_PEM
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-stars-service-keys
+                  key: PRIVATE_KEY_PEM
+            - name: ENC_PRIVATE_KEY_B64
+              valueFrom:
+                secretKeyRef:
+                  name: telegram-stars-service-keys
+                  key: ENC_PRIVATE_KEY_B64
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 4300
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 4300
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telegram-stars-service
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: telegram-stars-service
+  ports:
+    - name: http
+      port: 4300
+      targetPort: 4300
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telegram-stars-miniapp
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: telegram-stars-miniapp
+  template:
+    metadata:
+      labels:
+        app: telegram-stars-miniapp
+    spec:
+      containers:
+        - name: telegram-stars-miniapp
+          image: serviceconstructor-telegram-stars-miniapp:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 80
+              name: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telegram-stars-miniapp
+  namespace: serviceconstructor
+spec:
+  selector:
+    app: telegram-stars-miniapp
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: telegram-stars-service
+  namespace: serviceconstructor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/upstream-vhost: telegram-stars-service.serviceconstructor.dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: telegram-stars-service.serviceconstructor.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: telegram-stars-service
+                port:
+                  number: 4300
+  tls:
+    - hosts:
+        - telegram-stars-service.serviceconstructor.dev
+      secretName: telegram-stars-service-serviceconstructor-dev-tls
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: telegram-stars-miniapp
+  namespace: serviceconstructor
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/upstream-vhost: telegram-stars-miniapp.serviceconstructor.dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: telegram-stars-miniapp.serviceconstructor.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: telegram-stars-miniapp
+                port:
+                  number: 80
+  tls:
+    - hosts:
+        - telegram-stars-miniapp.serviceconstructor.dev
+      secretName: telegram-stars-miniapp-serviceconstructor-dev-tls

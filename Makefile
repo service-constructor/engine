@@ -193,6 +193,35 @@ coffee-deploy: coffee-service-image coffee-miniapp-image
 
 examples-deploy: image-deploy coffee-deploy
 
+# --- Telegram Stars vertical (Go service + Python Fragment sidecar + mini-app) --
+stars-service-image:
+	rsync -az --delete --exclude '.git' --exclude 'keys' --exclude 'bin' \
+	  $(REPO_ROOT)/telegram-stars-service $(SSH_HOST):$(REMOTE_DIR)/
+	ssh $(SSH_HOST) 'cd $(REMOTE_DIR) && \
+	  DOCKER_BUILDKIT=0 sudo -E docker build -f telegram-stars-service/Dockerfile -t serviceconstructor-telegram-stars-service:latest telegram-stars-service/ && \
+	  sudo docker save serviceconstructor-telegram-stars-service:latest | sudo ctr -n k8s.io images import -'
+
+fragment-sidecar-image:
+	rsync -az --delete --exclude '.git' --exclude '__pycache__' \
+	  $(REPO_ROOT)/fragment-sidecar $(SSH_HOST):$(REMOTE_DIR)/
+	ssh $(SSH_HOST) 'cd $(REMOTE_DIR) && \
+	  DOCKER_BUILDKIT=0 sudo -E docker build -f fragment-sidecar/Dockerfile -t serviceconstructor-fragment-sidecar:latest fragment-sidecar/ && \
+	  sudo docker save serviceconstructor-fragment-sidecar:latest | sudo ctr -n k8s.io images import -'
+
+stars-miniapp-image:
+	rsync -az --delete --exclude '.git' --exclude 'node_modules' --exclude 'dist' --exclude '*.tsbuildinfo' \
+	  $(REPO_ROOT)/telegram-stars-miniapp $(SSH_HOST):$(REMOTE_DIR)/
+	ssh $(SSH_HOST) 'cd $(REMOTE_DIR) && \
+	  DOCKER_BUILDKIT=0 sudo -E docker build -f telegram-stars-miniapp/Dockerfile -t serviceconstructor-telegram-stars-miniapp:latest telegram-stars-miniapp/ && \
+	  sudo docker save serviceconstructor-telegram-stars-miniapp:latest | sudo ctr -n k8s.io images import -'
+
+stars-deploy: stars-service-image fragment-sidecar-image stars-miniapp-image
+	kubectl apply -f $(K8S_DIR)/86-telegram-stars.yaml
+	kubectl -n $(K8S_NS) rollout restart deploy/telegram-stars-service deploy/fragment-sidecar deploy/telegram-stars-miniapp
+	kubectl -n $(K8S_NS) rollout status  deploy/telegram-stars-service --timeout=120s
+	kubectl -n $(K8S_NS) rollout status  deploy/fragment-sidecar        --timeout=120s
+	kubectl -n $(K8S_NS) rollout status  deploy/telegram-stars-miniapp  --timeout=120s
+
 # Apply all manifests (namespace, secret, postgres, ledger, auth, engine, ingress, shell, admin, examples).
 k8s-apply:
 	kubectl apply -f $(K8S_DIR)/00-namespace.yaml
