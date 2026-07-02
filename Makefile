@@ -4,7 +4,9 @@ export PATH := $(PATH):$(GOBIN)
 .PHONY: tools generate tidy build run docker-up docker-down migrate-up migrate-down test \
         k8s-secret k8s-images k8s-apply k8s-restart k8s-deploy k8s-status k8s-logs k8s-nuke \
         engine-image engine-restart engine-deploy ledger-image ledger-restart ledger-deploy \
-        auth-image auth-restart auth-deploy shell-image shell-restart shell-deploy \
+        auth-image auth-restart auth-deploy \
+        watcher-image watcher-restart watcher-deploy watcher-apply \
+        shell-image shell-restart shell-deploy \
         admin-image admin-restart admin-deploy \
         gateway-image gateway-restart gateway-deploy \
         image-service-image image-miniapp-image coffee-service-image coffee-miniapp-image \
@@ -39,7 +41,7 @@ k8s-secret:
 	@echo "wrote $(K8S_DIR)/10-secret.yaml (gitignored)"
 
 # Build+import every service image (delegates to per-service targets).
-k8s-images: ledger-image engine-image auth-image gateway-image shell-image admin-image \
+k8s-images: ledger-image engine-image auth-image watcher-image gateway-image shell-image admin-image \
             image-service-image image-miniapp-image coffee-service-image coffee-miniapp-image
 
 # --- Per-service build + rollout (faster when you touched only one service) --
@@ -86,6 +88,24 @@ auth-restart:
 	kubectl -n $(K8S_NS) rollout status  deploy/auth --timeout=120s
 
 auth-deploy: auth-image auth-restart
+
+# deposit-watcher: build context is the repo root (needs the sibling ledger
+# module for the `replace` directive), same as auth.
+watcher-image:
+	rsync -az --delete --exclude '.git' --exclude 'node_modules' --exclude 'bin' --exclude 'checkpoint.json' \
+	  $(REPO_ROOT)/deposit-watcher $(REPO_ROOT)/ledger $(SSH_HOST):$(REMOTE_DIR)/
+	ssh $(SSH_HOST) 'cd $(REMOTE_DIR) && \
+	  DOCKER_BUILDKIT=0 sudo -E docker build -f deposit-watcher/Dockerfile -t serviceconstructor-deposit-watcher:latest . && \
+	  sudo docker save serviceconstructor-deposit-watcher:latest | sudo ctr -n k8s.io images import -'
+
+watcher-restart:
+	kubectl -n $(K8S_NS) rollout restart deploy/deposit-watcher
+	kubectl -n $(K8S_NS) rollout status  deploy/deposit-watcher --timeout=120s
+
+watcher-deploy: watcher-image watcher-apply watcher-restart
+
+watcher-apply:
+	kubectl apply -f $(K8S_DIR)/45-deposit-watcher.yaml
 
 # wallet-shell: node build, self-contained context in wallet-shell/.
 shell-image:
@@ -180,6 +200,7 @@ k8s-apply:
 	kubectl apply -f $(K8S_DIR)/20-postgres.yaml
 	kubectl apply -f $(K8S_DIR)/30-ledger.yaml
 	kubectl apply -f $(K8S_DIR)/35-auth.yaml
+	kubectl apply -f $(K8S_DIR)/45-deposit-watcher.yaml
 	kubectl apply -f $(K8S_DIR)/05-gateway.yaml
 	kubectl apply -f $(K8S_DIR)/40-engine.yaml
 	kubectl apply -f $(K8S_DIR)/50-ingress.yaml
@@ -190,9 +211,10 @@ k8s-apply:
 
 # Roll all app pods to pick up freshly imported :latest images.
 k8s-restart:
-	kubectl -n $(K8S_NS) rollout restart deploy/ledger deploy/auth deploy/engine deploy/wallet-shell deploy/admin-ui
-	kubectl -n $(K8S_NS) rollout status  deploy/ledger       --timeout=120s
-	kubectl -n $(K8S_NS) rollout status  deploy/auth         --timeout=120s
+	kubectl -n $(K8S_NS) rollout restart deploy/ledger deploy/auth deploy/deposit-watcher deploy/engine deploy/wallet-shell deploy/admin-ui
+	kubectl -n $(K8S_NS) rollout status  deploy/ledger          --timeout=120s
+	kubectl -n $(K8S_NS) rollout status  deploy/auth            --timeout=120s
+	kubectl -n $(K8S_NS) rollout status  deploy/deposit-watcher --timeout=120s
 	kubectl -n $(K8S_NS) rollout status  deploy/engine       --timeout=120s
 	kubectl -n $(K8S_NS) rollout status  deploy/wallet-shell --timeout=120s
 	kubectl -n $(K8S_NS) rollout status  deploy/admin-ui     --timeout=120s

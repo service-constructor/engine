@@ -1,0 +1,60 @@
+# deposit-watcher: watches incoming TON transfers on the shared deposit address,
+# resolves each by memo tag to a user's ledger wallet, and credits it to the
+# ledger. Background consumer only — no ports, no Service, no database. It is the
+# real-money counterpart to auth's mock DepositByMemo: GRAM (is_real) is funded
+# only here, from on-chain deposits.
+#
+# The checkpoint (last processed logical time) lives on an emptyDir: correctness
+# rests on the ledger's per-ref idempotency, so a rescan after a pod reschedule
+# never double-credits — the checkpoint is only a scan optimization.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deposit-watcher
+  namespace: serviceconstructor
+spec:
+  replicas: 1
+  # One watcher only: two would double-scan (harmless via idempotency, but
+  # wasteful). Recreate avoids briefly running two during a rollout.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: deposit-watcher
+  template:
+    metadata:
+      labels:
+        app: deposit-watcher
+    spec:
+      containers:
+        - name: deposit-watcher
+          image: serviceconstructor-deposit-watcher:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: LEDGER_ADDR
+              value: "ledger:9100"
+            - name: TON_CONFIG_URL
+              value: "https://ton-blockchain.github.io/global.config.json"
+            # Shared mainnet deposit address — MUST match the ledger's TON_ADDRESS
+            # stamped on every account.
+            - name: DEPOSIT_ADDRESS
+              value: "UQDX6G9_n_aIDhLBabVxpQLWL7APzTpejF0bZ0oT0-3O8qeC"
+            # 2 = GRAM (real money). On-chain TON credits this ledger currency.
+            - name: CURRENCY_ID
+              value: "2"
+            - name: CHECKPOINT_PATH
+              value: "/state/checkpoint.json"
+            # START_LT (optional) seeds the first-run scan position when there is no
+            # checkpoint yet — set it to bootstrap from a known LT (e.g. to pick up a
+            # specific past deposit). Left unset, the watcher starts from the account
+            # head and processes only new transfers.
+          volumeMounts:
+            - name: state
+              mountPath: /state
+          # The watcher holds a live liteserver subscription; a simple liveness
+          # signal is that the process is up. It exits non-zero on a fatal source
+          # error, so the kubelet restarts it.
+      volumes:
+        - name: state
+          emptyDir: {}
