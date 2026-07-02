@@ -9,11 +9,15 @@ import (
 )
 
 // splitFee computes the platform fee and the net amount routed to the service,
-// from the registry fee (percent and/or fixed). amount is the full quote
-// amount. Results are decimal strings with the same scale handling as input.
+// from the registry fee (percent and/or fixed). amount is the full quote amount.
 //
-// fee = round(amount * percent/100) + fixed, clamped to [0, amount].
+// fee = amount * percent/100 + fixed, clamped to [0, amount].
 // net = amount - fee.
+//
+// The fee is exact — NOT rounded. The ledger stores NUMERIC(38,18), so a precise
+// value like 0.05 or 0.025 is represented faithfully. (An earlier version rounded
+// the fee to the price's decimal places, which overcharged short-scale prices:
+// a 10% fee on "0.5" rounded 0.05 up to 0.1 = 20%.)
 func splitFee(amount string, fee domain.Fee) (net string, feeOut string, err error) {
 	amt, err := decimal.NewFromString(amount)
 	if err != nil {
@@ -39,12 +43,7 @@ func splitFee(amount string, fee domain.Fee) (net string, feeOut string, err err
 		total = total.Add(fx)
 	}
 
-	// Match the amount's scale (number of decimal places) for currency-clean
-	// values, then clamp so fee never exceeds the amount.
-	scale := amt.Exponent()
-	if scale < 0 {
-		total = total.Round(-scale)
-	}
+	// Clamp so the fee never exceeds the amount (or goes negative).
 	if total.GreaterThan(amt) {
 		total = amt
 	}
