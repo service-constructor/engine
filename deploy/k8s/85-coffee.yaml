@@ -33,7 +33,7 @@ spec:
             - name: SERVICE_ID
               value: "svc_09415db346e346daa061310f71c8613b"
             - name: PLATFORM_BASE_URL
-              value: "http://engine:8080"
+              value: "http://gateway:8080"
             # kid must match the kid the signing public key is registered under.
             - name: SERVICE_KID
               value: "svc-key-mr2kl7v8"

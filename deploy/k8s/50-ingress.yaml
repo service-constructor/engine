@@ -21,7 +21,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: engine
+                name: gateway
                 port:
                   number: 8080
   tls:

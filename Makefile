@@ -6,6 +6,7 @@ export PATH := $(PATH):$(GOBIN)
         engine-image engine-restart engine-deploy ledger-image ledger-restart ledger-deploy \
         auth-image auth-restart auth-deploy shell-image shell-restart shell-deploy \
         admin-image admin-restart admin-deploy \
+        gateway-image gateway-restart gateway-deploy \
         image-service-image image-miniapp-image coffee-service-image coffee-miniapp-image \
         image-deploy coffee-deploy examples-deploy
 
@@ -38,7 +39,7 @@ k8s-secret:
 	@echo "wrote $(K8S_DIR)/10-secret.yaml (gitignored)"
 
 # Build+import every service image (delegates to per-service targets).
-k8s-images: ledger-image engine-image auth-image shell-image admin-image \
+k8s-images: ledger-image engine-image auth-image gateway-image shell-image admin-image \
             image-service-image image-miniapp-image coffee-service-image coffee-miniapp-image
 
 # --- Per-service build + rollout (faster when you touched only one service) --
@@ -114,6 +115,20 @@ admin-restart:
 
 admin-deploy: admin-image admin-restart
 
+# gateway: self-contained Go module (own proto copies).
+gateway-image:
+	rsync -az --delete --exclude '.git' --exclude 'node_modules' --exclude 'bin' \
+	  $(REPO_ROOT)/gateway $(SSH_HOST):$(REMOTE_DIR)/
+	ssh $(SSH_HOST) 'cd $(REMOTE_DIR) && \
+	  DOCKER_BUILDKIT=0 sudo -E docker build -f gateway/Dockerfile -t serviceconstructor-gateway:latest gateway/ && \
+	  sudo docker save serviceconstructor-gateway:latest | sudo ctr -n k8s.io images import -'
+
+gateway-restart:
+	kubectl -n $(K8S_NS) rollout restart deploy/gateway
+	kubectl -n $(K8S_NS) rollout status  deploy/gateway --timeout=120s
+
+gateway-deploy: gateway-image gateway-restart
+
 # --- Example services + mini-apps (image, coffee) --------------------------
 # EXAMPLES_ROOT is the parent dir holding example-* projects (same as REPO_ROOT).
 image-service-image:
@@ -165,6 +180,7 @@ k8s-apply:
 	kubectl apply -f $(K8S_DIR)/20-postgres.yaml
 	kubectl apply -f $(K8S_DIR)/30-ledger.yaml
 	kubectl apply -f $(K8S_DIR)/35-auth.yaml
+	kubectl apply -f $(K8S_DIR)/05-gateway.yaml
 	kubectl apply -f $(K8S_DIR)/40-engine.yaml
 	kubectl apply -f $(K8S_DIR)/50-ingress.yaml
 	kubectl apply -f $(K8S_DIR)/60-wallet-shell.yaml

@@ -30,9 +30,9 @@ spec:
             - name: SERVE_STATIC
               value: "1"
             - name: AUTH_BASE_URL
-              value: "http://auth:8090"
+              value: "http://gateway:8080"
             - name: PLATFORM_BASE_URL
-              value: "http://engine:8080"
+              value: "http://gateway:8080"
           readinessProbe:
             httpGet:
               path: /

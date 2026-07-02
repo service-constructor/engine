@@ -1,22 +1,17 @@
-// Command server runs the Service Constructor registry: a gRPC service with an
-// HTTP/JSON gateway in front of it, backed by PostgreSQL.
+// Command server runs the Service Constructor registry: a pure gRPC service
+// backed by PostgreSQL. HTTP is served by the standalone gateway in front of it.
 package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	scv1 "github.com/service-constructor/engine/gen/serviceconstructor/v1"
 	"github.com/service-constructor/engine/internal/auth"
@@ -128,13 +123,10 @@ func run(log *slog.Logger) error {
 	// idempotently, decoupled from the order transition that recorded them.
 	dispatcher := saga.NewDispatcher(orderRepo, ledger, log)
 
-	// Authentication is pluggable: an integrator can replace buildAuthenticator
-	// with their own Authenticator without touching the registry or transport.
-	authn, err := buildAuthenticator(cfg, log)
-	if err != nil {
-		return err
-	}
-	interceptor := auth.UnaryServerInterceptor(authn, auth.DefaultRoleResolver)
+	// Identity is verified centrally by the gateway and forwarded as gRPC
+	// metadata (x-user-id / x-user-roles); this interceptor trusts it. engine is
+	// reachable only in-cluster behind the gateway.
+	interceptor := auth.UnaryServerInterceptor(auth.DefaultRoleResolver)
 
 	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(interceptor))
 	scv1.RegisterServiceRegistryServer(grpcServer, registrySrv)
@@ -146,27 +138,10 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
-	// HTTP gateway dials the gRPC server over loopback and proxies REST → gRPC.
-	gwMux := runtime.NewServeMux()
-	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	if err := scv1.RegisterServiceRegistryHandlerFromEndpoint(ctx, gwMux, cfg.GRPCAddr, dialOpts); err != nil {
-		return err
-	}
-	if err := scv1.RegisterPaymentServiceHandlerFromEndpoint(ctx, gwMux, cfg.GRPCAddr, dialOpts); err != nil {
-		return err
-	}
-	httpServer := &http.Server{Addr: cfg.HTTPAddr, Handler: gwMux}
-
 	errCh := make(chan error, 2)
 	go func() {
 		log.Info("gRPC server listening", "addr", cfg.GRPCAddr)
 		if err := grpcServer.Serve(lis); err != nil {
-			errCh <- err
-		}
-	}()
-	go func() {
-		log.Info("HTTP gateway listening", "addr", cfg.HTTPAddr)
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()
@@ -187,30 +162,11 @@ func run(log *slog.Logger) error {
 	}
 
 	// Graceful shutdown.
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	_, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
-	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		log.Warn("http shutdown", "err", err)
-	}
 	grpcServer.GracefulStop()
 	log.Info("shutdown complete")
 	return nil
-}
-
-// buildAuthenticator selects the built-in Authenticator from config. Integrators
-// adopting this module can replace this function with one that returns their own
-// auth.Authenticator implementation.
-func buildAuthenticator(cfg config.Config, log *slog.Logger) (auth.Authenticator, error) {
-	switch cfg.AuthMode {
-	case "none":
-		log.Warn("AUTH_MODE=none: admin API is UNAUTHENTICATED — do not use in production")
-		return auth.AllowAll{}, nil
-	case "jwt", "":
-		log.Info("using JWT authenticator")
-		return auth.NewJWTAuthenticator([]byte(cfg.AuthJWTSecret)), nil
-	default:
-		return nil, fmt.Errorf("unknown AUTH_MODE %q", cfg.AuthMode)
-	}
 }
 
 // buildExecutor selects the saga executor from config. EXECUTOR_MODE=http calls

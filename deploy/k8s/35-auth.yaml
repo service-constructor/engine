@@ -22,15 +22,11 @@ spec:
           image: serviceconstructor-auth:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8090
-              name: http
             - containerPort: 9200
               name: grpc
           env:
             - name: GRPC_ADDR
               value: ":9200"
-            - name: HTTP_ADDR
-              value: ":8090"
             - name: LEDGER_ADDR
               value: "ledger:9100"
             - name: AUTH_JWT_SECRET
@@ -47,12 +43,12 @@ spec:
               value: "postgres://sc:$(POSTGRES_PASSWORD)@postgres:5432/auth?sslmode=disable"
           readinessProbe:
             tcpSocket:
-              port: 8090
+              port: 9200
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
-              port: 8090
+              port: 9200
             initialDelaySeconds: 15
             periodSeconds: 20
 ---
@@ -65,9 +61,6 @@ spec:
   selector:
     app: auth
   ports:
-    - name: http
-      port: 8090
-      targetPort: 8090
     - name: grpc
       port: 9200
       targetPort: 9200

@@ -28,24 +28,31 @@ const (
 // requirement.
 type RoleResolver func(fullMethod string) Requirement
 
-// UnaryServerInterceptor authenticates and authorizes incoming unary calls
-// according to resolve. Public methods pass through; AuthOnly requires a valid
-// principal; RequireAdmin additionally requires the admin role.
+// Identity metadata keys. The gateway verifies the JWT centrally and forwards
+// the caller's identity as these gRPC metadata pairs; engine trusts them (it is
+// only reachable in-cluster behind the gateway).
+const (
+	mdUserID    = "x-user-id"
+	mdUserRoles = "x-user-roles"
+)
+
+// UnaryServerInterceptor authorizes incoming unary calls according to resolve.
+// Public methods pass through; AuthOnly requires an identity; RequireAdmin
+// additionally requires the admin role.
 //
-// The bearer token is taken from the "authorization" metadata entry; the HTTP
-// gateway forwards the inbound Authorization header into this metadata, so a
-// single interceptor covers both gRPC and REST callers.
-func UnaryServerInterceptor(a Authenticator, resolve RoleResolver) grpc.UnaryServerInterceptor {
+// Identity comes from the gateway as x-user-id / x-user-roles metadata (the
+// gateway already verified the JWT). A missing x-user-id on a non-public method
+// is Unauthenticated.
+func UnaryServerInterceptor(resolve RoleResolver) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		reqd := resolve(info.FullMethod)
 		if reqd == Public {
 			return handler(ctx, req)
 		}
 
-		token := bearerFromMetadata(ctx)
-		principal, err := a.Authenticate(ctx, token)
-		if err != nil {
-			return nil, toGRPC(err)
+		principal := principalFromMetadata(ctx)
+		if principal == nil {
+			return nil, status.Error(codes.Unauthenticated, "missing identity")
 		}
 		ctx = WithPrincipal(ctx, principal)
 
@@ -56,6 +63,31 @@ func UnaryServerInterceptor(a Authenticator, resolve RoleResolver) grpc.UnarySer
 		}
 		return handler(ctx, req)
 	}
+}
+
+// principalFromMetadata builds the caller from the gateway's identity metadata,
+// or returns nil if x-user-id is absent.
+func principalFromMetadata(ctx context.Context) *Principal {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil
+	}
+	uid := first(md.Get(mdUserID))
+	if uid == "" {
+		return nil
+	}
+	var roles []string
+	if rs := first(md.Get(mdUserRoles)); rs != "" {
+		roles = strings.Split(rs, ",")
+	}
+	return &Principal{Subject: uid, Roles: roles}
+}
+
+func first(vals []string) string {
+	if len(vals) == 0 {
+		return ""
+	}
+	return vals[0]
 }
 
 // DefaultRoleResolver enforces the platform policy: registry/admin methods need
@@ -74,23 +106,6 @@ func DefaultRoleResolver(fullMethod string) Requirement {
 	default:
 		return Public
 	}
-}
-
-func bearerFromMetadata(ctx context.Context) string {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return ""
-	}
-	vals := md.Get("authorization")
-	if len(vals) == 0 {
-		return ""
-	}
-	const prefix = "Bearer "
-	v := vals[0]
-	if len(v) >= len(prefix) && strings.EqualFold(v[:len(prefix)], prefix) {
-		return v[len(prefix):]
-	}
-	return v
 }
 
 func toGRPC(err error) error {

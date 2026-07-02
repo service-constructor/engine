@@ -27,15 +27,11 @@ spec:
           image: serviceconstructor-engine:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 8080
-              name: http
             - containerPort: 9090
               name: grpc
           env:
             - name: GRPC_ADDR
               value: ":9090"
-            - name: HTTP_ADDR
-              value: ":8080"
             - name: LEDGER_MODE
               value: "grpc"
             - name: LEDGER_ADDR
@@ -44,13 +40,6 @@ spec:
               value: "http"
             - name: CONSENT_MODE
               value: "none"
-            - name: AUTH_MODE
-              value: "jwt"
-            - name: AUTH_JWT_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: serviceconstructor-secrets
-                  key: AUTH_JWT_SECRET
             - name: POSTGRES_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -60,12 +49,12 @@ spec:
               value: "postgres://sc:$(POSTGRES_PASSWORD)@postgres:5432/service_constructor?sslmode=disable"
           readinessProbe:
             tcpSocket:
-              port: 8080
+              port: 9090
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
-              port: 8080
+              port: 9090
             initialDelaySeconds: 15
             periodSeconds: 20
 ---
@@ -78,9 +67,6 @@ spec:
   selector:
     app: engine
   ports:
-    - name: http
-      port: 8080
-      targetPort: 8080
     - name: grpc
       port: 9090
       targetPort: 9090
