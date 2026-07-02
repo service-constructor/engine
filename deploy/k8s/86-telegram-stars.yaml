@@ -38,12 +38,43 @@ spec:
           env:
             - name: PORT
               value: "4310"
-            # mock: price from STARS_GRAM_RATE, deliver synthetically. Switch to
-            # "real" only with the Fragment secret (seed + cookies) present.
+            # real: buy Stars on fragment.com from our TON wallet via pyfragment
+            # (secrets from fragment-secrets below). Set to "mock" to disable.
             - name: FRAGMENT_MODE
-              value: "mock"
+              value: "real"
+            # Wallet version whose address matches the wallet connected/funded on
+            # fragment.com. Same seed -> different address per version; the funded
+            # wallet here is V4R2 (pyfragment would otherwise default to V5R1).
+            - name: FRAGMENT_WALLET_VERSION
+              value: "V4R2"
+            # Mock Fragment cost per Star (GRAM==TON). Ignored in real mode, where
+            # the cost = stars * $0.015 / live TON-USD rate (from tonapi).
             - name: STARS_GRAM_RATE
               value: "0.01"
+            # Service margin over the Fragment cost: price = cost * (1 + pct/100).
+            # This is how the service earns (separate from the platform's 10% fee).
+            - name: STARS_MARKUP_PCT
+              value: "15"
+            # Restart-safe delivery store: idempotency by ref lives in Postgres so
+            # a restart never risks a double on-chain purchase.
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: serviceconstructor-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgres://sc:$(POSTGRES_PASSWORD)@postgres:5432/stars?sslmode=disable"
+          # Real Fragment delivery secrets: the TON wallet seed (FRAGMENT_SEED_B64),
+          # the TON API key (FRAGMENT_API_KEY), and the four fragment.com session
+          # cookies (FRAGMENT_STEL_*). Created out-of-band:
+          #   kubectl -n serviceconstructor create secret generic fragment-secrets \
+          #     --from-literal=FRAGMENT_SEED_B64=$(base64 <<<'word1 ... word24') \
+          #     --from-literal=FRAGMENT_API_KEY=... \
+          #     --from-literal=FRAGMENT_STEL_TOKEN=... --from-literal=FRAGMENT_STEL_SSID=... \
+          #     --from-literal=FRAGMENT_STEL_TON_TOKEN=... --from-literal=FRAGMENT_STEL_DT=...
+          envFrom:
+            - secretRef:
+                name: fragment-secrets
           readinessProbe:
             httpGet:
               path: /healthz
@@ -100,6 +131,15 @@ spec:
               value: "fragment"
             - name: FRAGMENT_SIDECAR_URL
               value: "http://fragment-sidecar:4310"
+            # Persist orders so /execute idempotency and /orders history survive a
+            # restart (same 'stars' database as the sidecar's delivery store).
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: serviceconstructor-secrets
+                  key: POSTGRES_PASSWORD
+            - name: DATABASE_URL
+              value: "postgres://sc:$(POSTGRES_PASSWORD)@postgres:5432/stars?sslmode=disable"
             # Signing (Ed25519) + encryption (X25519) private keys, held in a
             # Secret so the read-only distroless container never writes to disk.
             # Secret created with:
