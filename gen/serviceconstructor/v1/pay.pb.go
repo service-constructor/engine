@@ -790,6 +790,89 @@ func (x *GetOrderRequest) GetOrderId() string {
 	return ""
 }
 
+// ListOrdersRequest carries no filter: the user is resolved from the request
+// identity (x-user-id metadata), and every order for that user is returned.
+type ListOrdersRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrdersRequest) Reset() {
+	*x = ListOrdersRequest{}
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrdersRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrdersRequest) ProtoMessage() {}
+
+func (x *ListOrdersRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrdersRequest.ProtoReflect.Descriptor instead.
+func (*ListOrdersRequest) Descriptor() ([]byte, []int) {
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{9}
+}
+
+type ListOrdersResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Orders belonging to the calling user, newest first (created_at DESC).
+	Orders        []*Order `protobuf:"bytes,1,rep,name=orders,proto3" json:"orders,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListOrdersResponse) Reset() {
+	*x = ListOrdersResponse{}
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListOrdersResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListOrdersResponse) ProtoMessage() {}
+
+func (x *ListOrdersResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListOrdersResponse.ProtoReflect.Descriptor instead.
+func (*ListOrdersResponse) Descriptor() ([]byte, []int) {
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ListOrdersResponse) GetOrders() []*Order {
+	if x != nil {
+		return x.Orders
+	}
+	return nil
+}
+
 // CallbackRequest is the provider's signed async finalization (white paper
 // section 9). Signed with the service private key over all fields except sig.
 type CallbackRequest struct {
@@ -806,7 +889,7 @@ type CallbackRequest struct {
 
 func (x *CallbackRequest) Reset() {
 	*x = CallbackRequest{}
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[9]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -818,7 +901,7 @@ func (x *CallbackRequest) String() string {
 func (*CallbackRequest) ProtoMessage() {}
 
 func (x *CallbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[9]
+	mi := &file_serviceconstructor_v1_pay_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -831,7 +914,7 @@ func (x *CallbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CallbackRequest.ProtoReflect.Descriptor instead.
 func (*CallbackRequest) Descriptor() ([]byte, []int) {
-	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{9}
+	return file_serviceconstructor_v1_pay_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *CallbackRequest) GetOrderId() string {
@@ -945,7 +1028,10 @@ const file_serviceconstructor_v1_pay_proto_rawDesc = "" +
 	"\x0fGetOrderRequest\x12\x1d\n" +
 	"\n" +
 	"service_id\x18\x01 \x01(\tR\tserviceId\x12\x19\n" +
-	"\border_id\x18\x02 \x01(\tR\aorderId\"\x8b\x01\n" +
+	"\border_id\x18\x02 \x01(\tR\aorderId\"\x13\n" +
+	"\x11ListOrdersRequest\"J\n" +
+	"\x12ListOrdersResponse\x124\n" +
+	"\x06orders\x18\x01 \x03(\v2\x1c.serviceconstructor.v1.OrderR\x06orders\"\x8b\x01\n" +
 	"\x0fCallbackRequest\x12\x19\n" +
 	"\border_id\x18\x01 \x01(\tR\aorderId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12!\n" +
@@ -963,10 +1049,13 @@ const file_serviceconstructor_v1_pay_proto_rawDesc = "" +
 	"\x15ORDER_STATE_COMPLETED\x10\x06\x12\x18\n" +
 	"\x14ORDER_STATE_REJECTED\x10\a\x12\x16\n" +
 	"\x12ORDER_STATE_FAILED\x10\b\x12\x18\n" +
-	"\x14ORDER_STATE_RELEASED\x10\t2\x87\x05\n" +
+	"\x14ORDER_STATE_RELEASED\x10\t2\xfe\x05\n" +
 	"\x0ePaymentService\x12c\n" +
 	"\x03Pay\x12!.serviceconstructor.v1.PayRequest\x1a\x1c.serviceconstructor.v1.Order\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/v1/services/pay\x12\x85\x01\n" +
-	"\bGetOrder\x12&.serviceconstructor.v1.GetOrderRequest\x1a\x1c.serviceconstructor.v1.Order\"3\x82\xd3\xe4\x93\x02-\x12+/v1/services/{service_id}/orders/{order_id}\x12\x8a\x01\n" +
+	"\bGetOrder\x12&.serviceconstructor.v1.GetOrderRequest\x1a\x1c.serviceconstructor.v1.Order\"3\x82\xd3\xe4\x93\x02-\x12+/v1/services/{service_id}/orders/{order_id}\x12u\n" +
+	"\n" +
+	"ListOrders\x12(.serviceconstructor.v1.ListOrdersRequest\x1a).serviceconstructor.v1.ListOrdersResponse\"\x12\x82\xd3\xe4\x93\x02\f\x12\n" +
+	"/v1/orders\x12\x8a\x01\n" +
 	"\x0eGetServiceInfo\x12,.serviceconstructor.v1.GetServiceInfoRequest\x1a\".serviceconstructor.v1.ServiceInfo\"&\x82\xd3\xe4\x93\x02 \x12\x1e/v1/services/{service_id}/info\x12\x86\x01\n" +
 	"\x0fListServiceInfo\x12-.serviceconstructor.v1.ListServiceInfoRequest\x1a..serviceconstructor.v1.ListServiceInfoResponse\"\x14\x82\xd3\xe4\x93\x02\x0e\x12\f/v1/services\x12r\n" +
 	"\bCallback\x12&.serviceconstructor.v1.CallbackRequest\x1a\x1c.serviceconstructor.v1.Order\" \x82\xd3\xe4\x93\x02\x1a:\x01*\"\x15/v1/services/callbackBFZDgithub.com/service-constructor/engine/gen/serviceconstructor/v1;scv1b\x06proto3"
@@ -984,7 +1073,7 @@ func file_serviceconstructor_v1_pay_proto_rawDescGZIP() []byte {
 }
 
 var file_serviceconstructor_v1_pay_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_serviceconstructor_v1_pay_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_serviceconstructor_v1_pay_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_serviceconstructor_v1_pay_proto_goTypes = []any{
 	(OrderState)(0),                 // 0: serviceconstructor.v1.OrderState
 	(*GetServiceInfoRequest)(nil),   // 1: serviceconstructor.v1.GetServiceInfoRequest
@@ -996,33 +1085,38 @@ var file_serviceconstructor_v1_pay_proto_goTypes = []any{
 	(*PayRequest)(nil),              // 7: serviceconstructor.v1.PayRequest
 	(*Order)(nil),                   // 8: serviceconstructor.v1.Order
 	(*GetOrderRequest)(nil),         // 9: serviceconstructor.v1.GetOrderRequest
-	(*CallbackRequest)(nil),         // 10: serviceconstructor.v1.CallbackRequest
-	nil,                             // 11: serviceconstructor.v1.Quote.MetadataEntry
-	(*timestamppb.Timestamp)(nil),   // 12: google.protobuf.Timestamp
+	(*ListOrdersRequest)(nil),       // 10: serviceconstructor.v1.ListOrdersRequest
+	(*ListOrdersResponse)(nil),      // 11: serviceconstructor.v1.ListOrdersResponse
+	(*CallbackRequest)(nil),         // 12: serviceconstructor.v1.CallbackRequest
+	nil,                             // 13: serviceconstructor.v1.Quote.MetadataEntry
+	(*timestamppb.Timestamp)(nil),   // 14: google.protobuf.Timestamp
 }
 var file_serviceconstructor_v1_pay_proto_depIdxs = []int32{
 	4,  // 0: serviceconstructor.v1.ListServiceInfoResponse.services:type_name -> serviceconstructor.v1.ServiceInfo
-	11, // 1: serviceconstructor.v1.Quote.metadata:type_name -> serviceconstructor.v1.Quote.MetadataEntry
+	13, // 1: serviceconstructor.v1.Quote.metadata:type_name -> serviceconstructor.v1.Quote.MetadataEntry
 	5,  // 2: serviceconstructor.v1.PayRequest.quote:type_name -> serviceconstructor.v1.Quote
 	6,  // 3: serviceconstructor.v1.PayRequest.consent:type_name -> serviceconstructor.v1.Consent
 	0,  // 4: serviceconstructor.v1.Order.state:type_name -> serviceconstructor.v1.OrderState
-	12, // 5: serviceconstructor.v1.Order.created_at:type_name -> google.protobuf.Timestamp
-	12, // 6: serviceconstructor.v1.Order.updated_at:type_name -> google.protobuf.Timestamp
-	7,  // 7: serviceconstructor.v1.PaymentService.Pay:input_type -> serviceconstructor.v1.PayRequest
-	9,  // 8: serviceconstructor.v1.PaymentService.GetOrder:input_type -> serviceconstructor.v1.GetOrderRequest
-	1,  // 9: serviceconstructor.v1.PaymentService.GetServiceInfo:input_type -> serviceconstructor.v1.GetServiceInfoRequest
-	2,  // 10: serviceconstructor.v1.PaymentService.ListServiceInfo:input_type -> serviceconstructor.v1.ListServiceInfoRequest
-	10, // 11: serviceconstructor.v1.PaymentService.Callback:input_type -> serviceconstructor.v1.CallbackRequest
-	8,  // 12: serviceconstructor.v1.PaymentService.Pay:output_type -> serviceconstructor.v1.Order
-	8,  // 13: serviceconstructor.v1.PaymentService.GetOrder:output_type -> serviceconstructor.v1.Order
-	4,  // 14: serviceconstructor.v1.PaymentService.GetServiceInfo:output_type -> serviceconstructor.v1.ServiceInfo
-	3,  // 15: serviceconstructor.v1.PaymentService.ListServiceInfo:output_type -> serviceconstructor.v1.ListServiceInfoResponse
-	8,  // 16: serviceconstructor.v1.PaymentService.Callback:output_type -> serviceconstructor.v1.Order
-	12, // [12:17] is the sub-list for method output_type
-	7,  // [7:12] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	14, // 5: serviceconstructor.v1.Order.created_at:type_name -> google.protobuf.Timestamp
+	14, // 6: serviceconstructor.v1.Order.updated_at:type_name -> google.protobuf.Timestamp
+	8,  // 7: serviceconstructor.v1.ListOrdersResponse.orders:type_name -> serviceconstructor.v1.Order
+	7,  // 8: serviceconstructor.v1.PaymentService.Pay:input_type -> serviceconstructor.v1.PayRequest
+	9,  // 9: serviceconstructor.v1.PaymentService.GetOrder:input_type -> serviceconstructor.v1.GetOrderRequest
+	10, // 10: serviceconstructor.v1.PaymentService.ListOrders:input_type -> serviceconstructor.v1.ListOrdersRequest
+	1,  // 11: serviceconstructor.v1.PaymentService.GetServiceInfo:input_type -> serviceconstructor.v1.GetServiceInfoRequest
+	2,  // 12: serviceconstructor.v1.PaymentService.ListServiceInfo:input_type -> serviceconstructor.v1.ListServiceInfoRequest
+	12, // 13: serviceconstructor.v1.PaymentService.Callback:input_type -> serviceconstructor.v1.CallbackRequest
+	8,  // 14: serviceconstructor.v1.PaymentService.Pay:output_type -> serviceconstructor.v1.Order
+	8,  // 15: serviceconstructor.v1.PaymentService.GetOrder:output_type -> serviceconstructor.v1.Order
+	11, // 16: serviceconstructor.v1.PaymentService.ListOrders:output_type -> serviceconstructor.v1.ListOrdersResponse
+	4,  // 17: serviceconstructor.v1.PaymentService.GetServiceInfo:output_type -> serviceconstructor.v1.ServiceInfo
+	3,  // 18: serviceconstructor.v1.PaymentService.ListServiceInfo:output_type -> serviceconstructor.v1.ListServiceInfoResponse
+	8,  // 19: serviceconstructor.v1.PaymentService.Callback:output_type -> serviceconstructor.v1.Order
+	14, // [14:20] is the sub-list for method output_type
+	8,  // [8:14] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_serviceconstructor_v1_pay_proto_init() }
@@ -1036,7 +1130,7 @@ func file_serviceconstructor_v1_pay_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_serviceconstructor_v1_pay_proto_rawDesc), len(file_serviceconstructor_v1_pay_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   11,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

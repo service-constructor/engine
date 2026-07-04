@@ -117,6 +117,27 @@ func local_request_PaymentService_GetOrder_0(ctx context.Context, marshaler runt
 	return msg, metadata, err
 }
 
+func request_PaymentService_ListOrders_0(ctx context.Context, marshaler runtime.Marshaler, client PaymentServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListOrdersRequest
+		metadata runtime.ServerMetadata
+	)
+	if req.Body != nil {
+		_, _ = io.Copy(io.Discard, req.Body)
+	}
+	msg, err := client.ListOrders(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_PaymentService_ListOrders_0(ctx context.Context, marshaler runtime.Marshaler, server PaymentServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq ListOrdersRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := server.ListOrders(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_PaymentService_GetServiceInfo_0(ctx context.Context, marshaler runtime.Marshaler, client PaymentServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq GetServiceInfoRequest
@@ -249,6 +270,26 @@ func RegisterPaymentServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			return
 		}
 		forward_PaymentService_GetOrder_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodGet, pattern_PaymentService_ListOrders_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/serviceconstructor.v1.PaymentService/ListOrders", runtime.WithHTTPPathPattern("/v1/orders"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_PaymentService_ListOrders_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_PaymentService_ListOrders_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodGet, pattern_PaymentService_GetServiceInfo_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -384,6 +425,23 @@ func RegisterPaymentServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		}
 		forward_PaymentService_GetOrder_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_PaymentService_ListOrders_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/serviceconstructor.v1.PaymentService/ListOrders", runtime.WithHTTPPathPattern("/v1/orders"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_PaymentService_ListOrders_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_PaymentService_ListOrders_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_PaymentService_GetServiceInfo_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -441,6 +499,7 @@ func RegisterPaymentServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 var (
 	pattern_PaymentService_Pay_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "services", "pay"}, ""))
 	pattern_PaymentService_GetOrder_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3, 1, 0, 4, 1, 5, 4}, []string{"v1", "services", "service_id", "orders", "order_id"}, ""))
+	pattern_PaymentService_ListOrders_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "orders"}, ""))
 	pattern_PaymentService_GetServiceInfo_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "services", "service_id", "info"}, ""))
 	pattern_PaymentService_ListServiceInfo_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "services"}, ""))
 	pattern_PaymentService_Callback_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "services", "callback"}, ""))
@@ -449,6 +508,7 @@ var (
 var (
 	forward_PaymentService_Pay_0             = runtime.ForwardResponseMessage
 	forward_PaymentService_GetOrder_0        = runtime.ForwardResponseMessage
+	forward_PaymentService_ListOrders_0      = runtime.ForwardResponseMessage
 	forward_PaymentService_GetServiceInfo_0  = runtime.ForwardResponseMessage
 	forward_PaymentService_ListServiceInfo_0 = runtime.ForwardResponseMessage
 	forward_PaymentService_Callback_0        = runtime.ForwardResponseMessage

@@ -82,6 +82,33 @@ func (r *OrderRepository) FindByNonce(ctx context.Context, serviceID, nonce stri
 	return o, nil
 }
 
+// ListByUser returns every order belonging to userID, newest first. It powers
+// the personal cabinet's "My orders" view (orders across all mini-apps). Backed
+// by the orders_user_created_idx index.
+func (r *OrderRepository) ListByUser(ctx context.Context, userID string) ([]*domain.Order, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+orderColumns+` FROM orders
+		WHERE user_id = $1
+		ORDER BY created_at DESC`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list orders by user: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.Order
+	for rows.Next() {
+		o, err := scanOrder(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan user order: %w", err)
+		}
+		out = append(out, o)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate user orders: %w", err)
+	}
+	return out, nil
+}
+
 // pgExecutor is satisfied by both *pgxpool.Pool and pgx.Tx, so the order UPDATE
 // can run either standalone or inside a transaction.
 type pgExecutor interface {

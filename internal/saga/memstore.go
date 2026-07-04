@@ -2,6 +2,7 @@ package saga
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -166,5 +167,21 @@ func (s *MemOrderStore) ListStuck(_ context.Context, olderThan time.Time, limit 
 			break
 		}
 	}
+	return out, nil
+}
+
+func (s *MemOrderStore) ListByUser(_ context.Context, userID string) ([]*domain.Order, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []*domain.Order
+	for _, o := range s.byID {
+		if o.UserID != userID {
+			continue
+		}
+		cp := *o
+		out = append(out, &cp)
+	}
+	// Newest first, matching the postgres store's ORDER BY created_at DESC.
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	return out, nil
 }

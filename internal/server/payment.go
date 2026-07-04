@@ -95,6 +95,28 @@ func (s *PaymentServer) GetOrder(ctx context.Context, req *scv1.GetOrderRequest)
 	return orderToProto(order), nil
 }
 
+// ListOrders returns the calling user's orders across every mini-app, newest
+// first. The user is taken from the authenticated session (never the request
+// body), so a user can only list their own orders.
+func (s *PaymentServer) ListOrders(ctx context.Context, _ *scv1.ListOrdersRequest) (*scv1.ListOrdersResponse, error) {
+	userID := ""
+	if p, ok := auth.PrincipalFromContext(ctx); ok && p != nil {
+		userID = p.Subject
+	}
+	if userID == "" {
+		return nil, status.Error(codes.Unauthenticated, "no authenticated user")
+	}
+	orders, err := s.orders.ListByUser(ctx, userID)
+	if err != nil {
+		return nil, payErrToStatus(err)
+	}
+	out := make([]*scv1.Order, 0, len(orders))
+	for _, o := range orders {
+		out = append(out, orderToProto(o))
+	}
+	return &scv1.ListOrdersResponse{Orders: out}, nil
+}
+
 func (s *PaymentServer) GetServiceInfo(ctx context.Context, req *scv1.GetServiceInfoRequest) (*scv1.ServiceInfo, error) {
 	if req.GetServiceId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "service_id is required")

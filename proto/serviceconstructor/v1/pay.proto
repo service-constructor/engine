@@ -26,6 +26,16 @@ service PaymentService {
     };
   }
 
+  // ListOrders returns the calling user's orders across every mini-app, newest
+  // first. The user is taken from the request identity (x-user-id metadata set
+  // by the gateway), never from the request body, so a user can only ever list
+  // their own orders. Powers the personal cabinet's "My orders" view.
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse) {
+    option (google.api.http) = {
+      get: "/v1/orders"
+    };
+  }
+
   // GetServiceInfo returns a service's public, non-sensitive info (name, origins,
   // encryption public key) so a shell can open the service. It is unscoped (any
   // authenticated user may open any service) and returns no secrets.
@@ -151,6 +161,15 @@ message Order {
 message GetOrderRequest {
   string service_id = 1;
   string order_id = 2;
+}
+
+// ListOrdersRequest carries no filter: the user is resolved from the request
+// identity (x-user-id metadata), and every order for that user is returned.
+message ListOrdersRequest {}
+
+message ListOrdersResponse {
+  // Orders belonging to the calling user, newest first (created_at DESC).
+  repeated Order orders = 1;
 }
 
 // CallbackRequest is the provider's signed async finalization (white paper

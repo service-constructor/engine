@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	PaymentService_Pay_FullMethodName             = "/serviceconstructor.v1.PaymentService/Pay"
 	PaymentService_GetOrder_FullMethodName        = "/serviceconstructor.v1.PaymentService/GetOrder"
+	PaymentService_ListOrders_FullMethodName      = "/serviceconstructor.v1.PaymentService/ListOrders"
 	PaymentService_GetServiceInfo_FullMethodName  = "/serviceconstructor.v1.PaymentService/GetServiceInfo"
 	PaymentService_ListServiceInfo_FullMethodName = "/serviceconstructor.v1.PaymentService/ListServiceInfo"
 	PaymentService_Callback_FullMethodName        = "/serviceconstructor.v1.PaymentService/Callback"
@@ -38,6 +39,11 @@ type PaymentServiceClient interface {
 	Pay(ctx context.Context, in *PayRequest, opts ...grpc.CallOption) (*Order, error)
 	// GetOrder returns the current state of an order.
 	GetOrder(ctx context.Context, in *GetOrderRequest, opts ...grpc.CallOption) (*Order, error)
+	// ListOrders returns the calling user's orders across every mini-app, newest
+	// first. The user is taken from the request identity (x-user-id metadata set
+	// by the gateway), never from the request body, so a user can only ever list
+	// their own orders. Powers the personal cabinet's "My orders" view.
+	ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error)
 	// GetServiceInfo returns a service's public, non-sensitive info (name, origins,
 	// encryption public key) so a shell can open the service. It is unscoped (any
 	// authenticated user may open any service) and returns no secrets.
@@ -75,6 +81,16 @@ func (c *paymentServiceClient) GetOrder(ctx context.Context, in *GetOrderRequest
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Order)
 	err := c.cc.Invoke(ctx, PaymentService_GetOrder_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *paymentServiceClient) ListOrders(ctx context.Context, in *ListOrdersRequest, opts ...grpc.CallOption) (*ListOrdersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListOrdersResponse)
+	err := c.cc.Invoke(ctx, PaymentService_ListOrders_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -123,6 +139,11 @@ type PaymentServiceServer interface {
 	Pay(context.Context, *PayRequest) (*Order, error)
 	// GetOrder returns the current state of an order.
 	GetOrder(context.Context, *GetOrderRequest) (*Order, error)
+	// ListOrders returns the calling user's orders across every mini-app, newest
+	// first. The user is taken from the request identity (x-user-id metadata set
+	// by the gateway), never from the request body, so a user can only ever list
+	// their own orders. Powers the personal cabinet's "My orders" view.
+	ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error)
 	// GetServiceInfo returns a service's public, non-sensitive info (name, origins,
 	// encryption public key) so a shell can open the service. It is unscoped (any
 	// authenticated user may open any service) and returns no secrets.
@@ -151,6 +172,9 @@ func (UnimplementedPaymentServiceServer) Pay(context.Context, *PayRequest) (*Ord
 }
 func (UnimplementedPaymentServiceServer) GetOrder(context.Context, *GetOrderRequest) (*Order, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetOrder not implemented")
+}
+func (UnimplementedPaymentServiceServer) ListOrders(context.Context, *ListOrdersRequest) (*ListOrdersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOrders not implemented")
 }
 func (UnimplementedPaymentServiceServer) GetServiceInfo(context.Context, *GetServiceInfoRequest) (*ServiceInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetServiceInfo not implemented")
@@ -214,6 +238,24 @@ func _PaymentService_GetOrder_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PaymentServiceServer).GetOrder(ctx, req.(*GetOrderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PaymentService_ListOrders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListOrdersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PaymentServiceServer).ListOrders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PaymentService_ListOrders_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PaymentServiceServer).ListOrders(ctx, req.(*ListOrdersRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -286,6 +328,10 @@ var PaymentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetOrder",
 			Handler:    _PaymentService_GetOrder_Handler,
+		},
+		{
+			MethodName: "ListOrders",
+			Handler:    _PaymentService_ListOrders_Handler,
 		},
 		{
 			MethodName: "GetServiceInfo",

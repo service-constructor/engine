@@ -121,6 +121,9 @@ type OrderStore interface {
 	// before olderThan, up to limit. The reconciler drives these to a final
 	// state. EXECUTED (capture pending) and PENDING (awaiting webhook) qualify.
 	ListStuck(ctx context.Context, olderThan time.Time, limit int) ([]*domain.Order, error)
+	// ListByUser returns every order belonging to userID, newest first. Powers
+	// the personal cabinet's cross-mini-app "My orders" listing.
+	ListByUser(ctx context.Context, userID string) ([]*domain.Order, error)
 	// ListTransitions returns an order's append-only audit trail in seq order.
 	ListTransitions(ctx context.Context, orderID string) ([]*domain.OrderTransition, error)
 }
